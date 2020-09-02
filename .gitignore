@@ -123,3 +123,8 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+.idea/
+
+obstacle-tower-env/
+trained_models/
