@@ -75,8 +75,6 @@ class Trainer:
         self.avg_ep_rewards = [np.array(self.ep_rewards[max(0, i - 150):max(1, i)]).mean()
                                for i in range(len(self.ep_rewards))]
         plt.figure(figsize=(10, 6))
-        axes = plt.gca()
-        axes.set_ylim([0, 5])
         plt.plot(self.ep_steps, self.ep_rewards, alpha=0.5)
         plt.plot(self.ep_steps, self.avg_ep_rewards, linewidth=3)
         plt.xlabel('steps')
