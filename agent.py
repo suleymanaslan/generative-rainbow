@@ -66,7 +66,8 @@ class Agent:
 
     def _act(self, state):
         with torch.no_grad():
-            return (self.online_net(state.unsqueeze(0)) * self.support).sum(2).argmax(1).item()
+            q, x = self.online_net(state.unsqueeze(0))
+            return (q * self.support).sum(2).argmax(1).item(), x
 
     def act(self, state):
         return self._act(state)
@@ -75,15 +76,15 @@ class Agent:
         return np.random.randint(0, self.action_size) if np.random.random() < epsilon else self.act(state)
 
     def _learn(self, mem, idxs, states, actions, returns, next_states, nonterminals, weights):
-        log_ps = self.online_net(states, use_log_softmax=True)
+        log_ps, _ = self.online_net(states, use_log_softmax=True)
         log_ps_a = log_ps[range(self.batch_size), actions]
 
         with torch.no_grad():
-            pns = self.online_net(next_states)
+            pns, _ = self.online_net(next_states)
             dns = self.support.expand_as(pns) * pns
             argmax_indices_ns = dns.sum(2).argmax(1)
             self.target_net.reset_noise()
-            pns = self.target_net(next_states)
+            pns, _ = self.target_net(next_states)
             pns_a = pns[range(self.batch_size), argmax_indices_ns]
 
             tz = returns.unsqueeze(1) + nonterminals * (self.discount ** self.n) * self.support.unsqueeze(0)

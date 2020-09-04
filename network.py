@@ -81,7 +81,7 @@ class DQN(nn.Module):
         q = v + a - a.mean(1, keepdim=True)
         q = F.log_softmax(q, dim=2) if use_log_softmax else F.softmax(q, dim=2)
 
-        return q
+        return q, x
 
     def reset_noise(self):
         self.fc_h_v.reset_noise()
