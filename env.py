@@ -24,10 +24,10 @@ class Env:
 
     def _reset_buffer(self):
         for _ in range(self.window):
-            self.state_buffer.append(torch.zeros(84, 84, device=self.device))
+            self.state_buffer.append(torch.zeros(96, 96, device=self.device))
 
     def _process_observation(self, observation):
-        observation = cv2.cvtColor(cv2.resize(observation, (84, 84), interpolation=cv2.INTER_AREA), cv2.COLOR_RGB2GRAY)
+        observation = cv2.cvtColor(observation, cv2.COLOR_RGB2GRAY)
         observation = torch.tensor(observation, dtype=torch.float32, device=self.device).div_(255)
         return observation
 
@@ -71,7 +71,7 @@ class Env:
         return np.array([rotation, movement, brake])
 
     def step(self, action):
-        frame_buffer = torch.zeros(2, 84, 84, device=self.device)
+        frame_buffer = torch.zeros(2, 96, 96, device=self.device)
         action = self.action_to_mca(action)
         return self._step(action, frame_buffer)
 

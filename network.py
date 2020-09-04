@@ -62,11 +62,13 @@ class DQN(nn.Module):
         self.fc_z_a = NoisyLinear(self.hidden_size, self.action_size * self.atoms, std_init=noisy_std)
 
     def _get_net(self):
-        net = nn.Sequential(nn.Conv2d(self.history_length, 32, 8, stride=4, padding=0), nn.ReLU(),
-                            nn.Conv2d(32, 64, 4, stride=2, padding=0), nn.ReLU(),
-                            nn.Conv2d(64, 64, 3, stride=1, padding=0), nn.ReLU()
+        net = nn.Sequential(nn.Conv2d(self.history_length, 32, 5, stride=2), nn.ReLU(),
+                            nn.Conv2d(32, 32, 3, stride=2), nn.ReLU(),
+                            nn.Conv2d(32, 64, 3, stride=2), nn.ReLU(),
+                            nn.Conv2d(64, 64, 3, stride=1), nn.ReLU(),
                             )
-        feat_size = 3136
+
+        feat_size = 4096
         return net, feat_size
 
     def forward(self, x, use_log_softmax=False):
