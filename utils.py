@@ -24,7 +24,7 @@ class Trainer:
         print(text)
         print(text, file=open(f'{self.model_dir}/log.txt', 'a'))
 
-    def train(self, env, agent, mem, notebook_file=None, load_file=None):
+    def train(self, env, agent, mem, notebook_file=None):
         training_timestamp = str(int(time.time()))
         self.model_dir = f'trained_models/model_{training_timestamp}/'
 
@@ -33,9 +33,6 @@ class Trainer:
 
         if notebook_file:
             shutil.copy2(f'./{notebook_file}.ipynb', self.model_dir)
-
-        if load_file:
-            agent.load(f"trained_models/{load_file}")
 
         self.print_and_log(f"{datetime.now()}, start training")
         priority_weight_increase = (1 - mem.priority_weight) / (self.max_steps - self.learning_start_step)

@@ -10,7 +10,7 @@ from network import DQN, SimpleDQN
 
 class Agent:
     def __init__(self, env, atoms, v_min, v_max, batch_size, multi_step,
-                 discount, norm_clip, lr, adam_eps, hidden_size, noisy_std):
+                 discount, norm_clip, lr, adam_eps, hidden_size, noisy_std, load_file=None):
         self.device = torch.device("cuda:0")
         self.env = env
         self.action_size = len(self.env.action_space)
@@ -36,6 +36,9 @@ class Agent:
             param.requires_grad = False
 
         self.optimizer = optim.Adam(self.online_net.parameters(), lr=lr, eps=adam_eps)
+
+        if load_file:
+            self.load(f"trained_models/{load_file}")
 
     def _get_nets(self):
         online_net = DQN(self.atoms, self.action_size, self.env.window, self.hidden_size, self.noisy_std) \
