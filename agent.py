@@ -73,7 +73,11 @@ class Agent:
         return self._act(state)
 
     def act_e_greedy(self, state, epsilon=0.001):
-        return np.random.randint(0, self.action_size) if np.random.random() < epsilon else self.act(state)
+        action, features = self.act(state)
+        if np.random.random() < epsilon:
+            return np.random.randint(0, self.action_size), features
+        else:
+            return action, features
 
     def _learn(self, mem, idxs, states, actions, returns, next_states, nonterminals, weights):
         log_ps, _ = self.online_net(states, use_log_softmax=True)

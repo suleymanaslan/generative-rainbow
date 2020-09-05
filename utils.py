@@ -45,7 +45,7 @@ class Trainer:
             while not done:
                 if steps % self.replay_frequency == 0:
                     agent.reset_noise()
-                action = agent.act(observation)
+                action, _ = agent.act(observation)
                 next_observation, reward, done, info = env.step(action)
                 self.rewards.append(reward)
                 ep_reward += reward
