@@ -82,8 +82,11 @@ class Agent:
         else:
             return action, features
 
-    def _learn(self, mem, idxs, states, actions, returns, next_states, nonterminals, weights):
-        log_ps, _ = self.online_net(states, use_log_softmax=True)
+    def _learn(self, mem, pgan, train_agent, idxs, states, actions, returns, next_states, nonterminals, weights):
+        log_ps, features = self.online_net(states, use_log_softmax=True)
+        pgan.learn(states, features, actions, next_states)
+        if not train_agent:
+            return
         log_ps_a = log_ps[range(self.batch_size), actions]
 
         with torch.no_grad():
@@ -114,9 +117,9 @@ class Agent:
         self.optimizer.step()
         mem.update_priorities(idxs, loss.detach().cpu().numpy())
 
-    def learn(self, mem):
+    def learn(self, mem, pgan, train_agent):
         idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)
-        self._learn(mem, idxs, states, actions, returns, next_states, nonterminals, weights)
+        self._learn(mem, pgan, train_agent, idxs, states, actions, returns, next_states, nonterminals, weights)
 
 
 class SimpleAgent(Agent):
@@ -135,7 +138,7 @@ class SimpleAgent(Agent):
     def act(self, state):
         return self._act(state.flatten())
 
-    def learn(self, mem):
+    def learn(self, mem, pgan, train_agent):
         idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)
-        self._learn(mem, idxs, states.view(self.batch_size, -1), actions, returns,
+        self._learn(mem, pgan, train_agent, idxs, states.view(self.batch_size, -1), actions, returns,
                     next_states.view(self.batch_size, -1), nonterminals, weights)

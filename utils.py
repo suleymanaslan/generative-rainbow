@@ -24,7 +24,7 @@ class Trainer:
         print(text)
         print(text, file=open(f'{self.model_dir}/log.txt', 'a'))
 
-    def train(self, env, agent, mem, notebook_file=None):
+    def train(self, env, agent, mem, pgan, notebook_file=None):
         training_timestamp = str(int(time.time()))
         self.model_dir = f'trained_models/model_{training_timestamp}/'
 
@@ -53,8 +53,7 @@ class Trainer:
                 mem.append(observation, action, reward, done)
                 if steps >= self.learning_start_step:
                     mem.priority_weight = min(mem.priority_weight + priority_weight_increase, 1)
-                    if steps % self.replay_frequency == 0:
-                        agent.learn(mem)
+                    agent.learn(mem, pgan, steps % self.replay_frequency == 0)
                     if steps % self.target_update == 0:
                         agent.update_target_net()
                 observation = next_observation
@@ -63,6 +62,8 @@ class Trainer:
             if episode_ix == 1 or episode_ix % 1 == 0:
                 self.print_and_log(f"{datetime.now()}, episode:{episode_ix:4d}, step:{steps:5d}, "
                                    f"reward:{ep_reward:10.4f}")
+            if steps >= self.learning_start_step and (episode_ix == 1 or episode_ix % 1 == 0):
+                pgan.save(self.model_dir)
         self.print_and_log(f"{datetime.now()}, end training")
 
     def save(self, agent):

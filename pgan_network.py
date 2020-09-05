@@ -12,7 +12,7 @@ from pytorch_GAN_zoo.models.networks.mini_batch_stddev_module import miniBatchSt
 class PGANGenerator(nn.Module):
     def __init__(self):
         super(PGANGenerator, self).__init__()
-        self.depth_scale0 = 512
+        self.depth_scale0 = 128
         self.equalized_lr = True
         self.init_bias_to_zero = True
         self.dim_output = 1
@@ -110,7 +110,7 @@ class PGANGenerator(nn.Module):
 class PGANDiscriminator(nn.Module):
     def __init__(self, history_length):
         super(PGANDiscriminator, self).__init__()
-        self.depth_scale0 = 512
+        self.depth_scale0 = 128
         self.equalized_lr = True
         self.init_bias_to_zero = True
         self.dim_input = history_length + 1
