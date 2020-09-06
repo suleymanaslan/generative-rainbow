@@ -63,11 +63,37 @@ class Env:
 
     @staticmethod
     def action_to_mca(action):
-        action_r = action // 3
-        action_m = action % 3
-        rotation = -1.0 if action_r == 0 else (+1.0 if action_r == 1 else 0.0)
-        movement = +1.0 if action_m == 0 else 0.0
-        brake = +0.8 if action_m == 1 else 0.0
+        action_r = action // 5
+        action_m = action % 5
+        rotation, movement, brake = 0.0, 0.0, 0.0
+
+        if action_r == 0:
+            rotation = -1.0
+        elif action_r == 1:
+            rotation = -0.5
+        elif action_r == 2:
+            rotation = 0.0
+        elif action_r == 3:
+            rotation = +0.5
+        elif action_r == 4:
+            rotation = +1.0
+
+        if action_m == 0:
+            movement = 0.0
+            brake = +0.8
+        elif action_m == 1:
+            movement = 0.0
+            brake = +0.4
+        elif action_m == 2:
+            movement = 0.0
+            brake = 0.0
+        elif action_m == 3:
+            movement = +0.5
+            brake = 0.0
+        elif action_m == 4:
+            movement = +1.0
+            brake = 0.0
+
         return np.array([rotation, movement, brake])
 
     def step(self, action):
