@@ -121,7 +121,36 @@ class Agent:
             return action, features
 
     def _learn(self, mem, idxs, states, actions, returns, next_states, nonterminals, weights):
-        log_ps, features = self.online_net(states, skip_gan=True, use_log_softmax=True)
+        self.optimizer_d.zero_grad()
+
+        self.real_state = states[0][-1].detach().cpu()
+        self.real_next_state = next_states[0][-1].detach().cpu()
+
+        real_input = torch.cat((states, next_states[:, self.env.window - 1:self.env.window, :, :]), dim=1)
+        pred_real_d = self.discrm_net(real_input, False)
+        loss_d = self.loss_criterion.getCriterion(pred_real_d, True)
+        all_loss_d = loss_d
+
+        log_ps, pred_fake_g = self.online_net(states, use_log_softmax=True)
+
+        fake_input = torch.cat((states, pred_fake_g), dim=1)
+        pred_fake_d = self.discrm_net(fake_input, False)
+        loss_d_fake = self.loss_criterion.getCriterion(pred_fake_d, False)
+        all_loss_d += loss_d_fake
+
+        WGANGPGradientPenalty(real_input, fake_input, self.discrm_net, weight=10.0, backward=True)
+
+        loss_epsilon = (pred_real_d[:, 0] ** 2).sum() * self.epsilon_d
+        all_loss_d += loss_epsilon
+
+        all_loss_d.backward(retain_graph=True)
+        finiteCheck(self.discrm_net.parameters())
+        self.optimizer_d.step()
+
+        self.optimizer_d.zero_grad()
+
+        self.generated_state = pred_fake_g[0][0].detach().cpu()
+
         log_ps_a = log_ps[range(self.batch_size), actions]
 
         with torch.no_grad():
