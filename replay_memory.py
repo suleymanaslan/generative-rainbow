@@ -140,19 +140,3 @@ class ReplayMemory:
     def update_priorities(self, idxs, priorities):
         priorities = np.power(priorities, self.priority_exponent)
         [self.transitions.update(idx, priority) for idx, priority in zip(idxs, priorities)]
-
-
-class SimpleReplayMemory(ReplayMemory):
-    def __init__(self, capacity, history_length, discount, multi_step, priority_weight, priority_exponent):
-        super(SimpleReplayMemory, self).__init__(capacity, history_length, discount, multi_step,
-                                                 priority_weight, priority_exponent)
-
-    def append(self, state, action, reward, terminal):
-        state = state[-1].to(dtype=torch.float32, device=torch.device("cpu"))
-        self._append(state, action, reward, terminal)
-
-    def _get_transition(self, idx):
-        return self._return_transition(idx, simple_blank_trans)
-
-    def _get_sample_from_segment(self, segment, i):
-        return self._return_sample_from_segment(segment, i)

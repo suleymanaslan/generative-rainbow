@@ -5,7 +5,7 @@ import torch
 import torch.optim as optim
 from torch.nn.utils import clip_grad_norm_
 
-from network import DQN, SimpleDQN
+from network import DQN
 
 
 class Agent:
@@ -120,25 +120,3 @@ class Agent:
     def learn(self, mem, pgan, train_agent):
         idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)
         self._learn(mem, pgan, train_agent, idxs, states, actions, returns, next_states, nonterminals, weights)
-
-
-class SimpleAgent(Agent):
-    def __init__(self, env, atoms, v_min, v_max, batch_size, multi_step,
-                 discount, norm_clip, lr, adam_eps, hidden_size, noisy_std):
-        super(SimpleAgent, self).__init__(env, atoms, v_min, v_max, batch_size, multi_step,
-                                          discount, norm_clip, lr, adam_eps, hidden_size, noisy_std)
-
-    def _get_nets(self):
-        online_net = SimpleDQN(self.atoms, self.action_size, self.env.window, self.hidden_size, self.noisy_std) \
-            .to(self.device)
-        target_net = SimpleDQN(self.atoms, self.action_size, self.env.window, self.hidden_size, self.noisy_std) \
-            .to(self.device)
-        return online_net, target_net
-
-    def act(self, state):
-        return self._act(state.flatten())
-
-    def learn(self, mem, pgan, train_agent):
-        idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)
-        self._learn(mem, pgan, train_agent, idxs, states.view(self.batch_size, -1), actions, returns,
-                    next_states.view(self.batch_size, -1), nonterminals, weights)

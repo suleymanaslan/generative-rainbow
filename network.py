@@ -90,12 +90,3 @@ class DQN(nn.Module):
         self.fc_z_a.reset_noise()
 
 
-class SimpleDQN(DQN):
-    def __init__(self, atoms, action_size, history_length, hidden_size, noisy_std):
-        super(SimpleDQN, self).__init__(atoms, action_size, history_length, hidden_size, noisy_std)
-
-    def _get_net(self):
-        net = nn.Sequential(nn.Linear(8 * self.history_length, self.hidden_size), nn.ReLU(),
-                            nn.Linear(self.hidden_size, self.hidden_size), nn.ReLU()
-                            )
-        return net, self.hidden_size
