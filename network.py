@@ -110,7 +110,7 @@ class GeneratorDQN(DQN):
         self.to_rgb_layers.append(EqualizedConv2d(self.depth_scale0, self.dim_output, 1, equalized=self.equalized_lr,
                                                   initBiasToZero=self.init_bias_to_zero))
 
-        self.format_layer = EqualizedLinear(self.dim_latent, 25 * self.scales_depth[0], equalized=self.equalized_lr,
+        self.format_layer = EqualizedLinear(self.dim_latent, 9 * self.scales_depth[0], equalized=self.equalized_lr,
                                             initBiasToZero=self.init_bias_to_zero)
 
         self.group_scale0 = nn.ModuleList()
@@ -218,7 +218,7 @@ class PGANDiscriminator(nn.Module):
         self.group_scale0.append(
             EqualizedConv2d(self.dim_entry_scale0, self.depth_scale0, 3, padding=1, equalized=self.equalized_lr,
                             initBiasToZero=self.init_bias_to_zero))
-        self.group_scale0.append(EqualizedLinear(self.depth_scale0 * 25, self.depth_scale0, equalized=self.equalized_lr,
+        self.group_scale0.append(EqualizedLinear(self.depth_scale0 * 9, self.depth_scale0, equalized=self.equalized_lr,
                                                  initBiasToZero=self.init_bias_to_zero))
 
         self.alpha = 0
