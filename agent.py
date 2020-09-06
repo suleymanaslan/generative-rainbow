@@ -87,6 +87,8 @@ class Agent:
         self.target_net.load_state_dict(torch.load(f"{load_dir}/target_net.pth"))
 
     def save_generated(self, save_dir):
+        if self.real_state is None:
+            return
         real_state = (self.real_state.numpy() * 255).astype(np.uint8)
         real_next_state = (self.real_next_state.numpy() * 255).astype(np.uint8)
         generated_state = self.generated_state.numpy()
