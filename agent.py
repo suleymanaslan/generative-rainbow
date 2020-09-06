@@ -1,4 +1,4 @@
-# adapted from https://github.com/Kaixhin/Rainbow
+# adapted from https://github.com/Kaixhin/Rainbow and https://github.com/facebookresearch/pytorch_GAN_zoo
 
 import time
 import torch
@@ -151,8 +151,6 @@ class Agent:
 
         self.optimizer_d.zero_grad()
 
-        self.generated_state = pred_fake_g[0][0].detach().cpu()
-
         log_ps_a = log_ps[range(self.batch_size), actions]
 
         with torch.no_grad():
@@ -177,10 +175,23 @@ class Agent:
             m.view(-1).index_add_(0, (u + offset).view(-1), (pns_a * (b - l.float())).view(-1))
 
         loss = -torch.sum(m * log_ps_a, 1)
-        self.online_net.zero_grad()
+
+        self.optimizer_o.zero_grad()
+
+        _, pred_fake_g = self.online_net(states, use_log_softmax=True)
+        self.generated_state = pred_fake_g[0][0].detach().cpu()
+
+        pred_fake_d, phi_g_fake = self.discrm_net(torch.cat((states, pred_fake_g), dim=1), True)
+        loss_g_fake = self.loss_criterion.getCriterion(pred_fake_d, True)
+
+        loss_g_fake.backward(retain_graph=True)
+        finiteCheck(self.online_net.parameters())
+
         (weights * loss).mean().backward()
         clip_grad_norm_(self.online_net.parameters(), self.norm_clip)
+
         self.optimizer_o.step()
+
         mem.update_priorities(idxs, loss.detach().cpu().numpy())
 
     def learn(self, mem):

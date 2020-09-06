@@ -63,7 +63,7 @@ class Trainer:
             if episode_ix == 1 or episode_ix % 1 == 0:
                 self.print_and_log(f"{datetime.now()}, episode:{episode_ix:4d}, step:{steps:5d}, "
                                    f"reward:{ep_reward:10.4f}")
-            if steps >= self.learning_start_step and (episode_ix == 1 or episode_ix % 1 == 0):
+            if steps >= self.learning_start_step and (episode_ix == 1 or episode_ix % 10 == 0):
                 agent.save_generated(self.model_dir)
         self.print_and_log(f"{datetime.now()}, end training")
 
