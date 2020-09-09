@@ -7,13 +7,16 @@ from datetime import datetime
 
 
 class Trainer:
-    def __init__(self, episodes, replay_frequency, reward_clip, max_steps, learning_start_step, target_update):
+    def __init__(self, episodes, replay_frequency, reward_clip, max_steps, learning_start_step,
+                 target_update, dqn_steps, gan_steps):
         self.episodes = episodes
         self.replay_frequency = replay_frequency
         self.reward_clip = reward_clip
         self.max_steps = max_steps
         self.learning_start_step = learning_start_step
         self.target_update = target_update
+        self.dqn_steps = dqn_steps
+        self.gan_steps = gan_steps
         self.rewards = []
         self.ep_rewards = []
         self.ep_steps = []
@@ -37,6 +40,7 @@ class Trainer:
         self.print_and_log(f"{datetime.now()}, start training")
         priority_weight_increase = (1 - mem.priority_weight) / (self.max_steps - self.learning_start_step)
         steps = 0
+        train_gan = False
         for episode_ix in range(1, self.episodes + 1):
             observation, ep_reward, ep_step, done = env.reset(), 0, 0, False
             while not done:
@@ -52,9 +56,13 @@ class Trainer:
                     reward = max(min(reward, self.reward_clip), -self.reward_clip) / self.reward_clip
                 mem.append(observation, action, reward, done)
                 if steps >= self.learning_start_step:
+                    if not train_gan and steps % self.dqn_steps == 0:
+                        train_gan = True
+                    elif train_gan and steps % self.gan_steps == 0:
+                        train_gan = False
                     mem.priority_weight = min(mem.priority_weight + priority_weight_increase, 1)
                     if steps % self.replay_frequency == 0:
-                        agent.learn(mem)
+                        agent.learn(mem, train_gan)
                     if steps % self.target_update == 0:
                         agent.update_target_net()
                 observation = next_observation
@@ -63,7 +71,7 @@ class Trainer:
             if episode_ix == 1 or episode_ix % 1 == 0:
                 self.print_and_log(f"{datetime.now()}, episode:{episode_ix:4d}, step:{steps:5d}, "
                                    f"reward:{ep_reward:10.4f}")
-            if steps >= self.learning_start_step and (episode_ix == 1 or episode_ix % 10 == 0):
+            if train_gan and (episode_ix == 1 or episode_ix % 10 == 0):
                 agent.save_generated(self.model_dir)
         self.print_and_log(f"{datetime.now()}, end training")
 
