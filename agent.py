@@ -206,6 +206,7 @@ class Agent:
                                       f"Loss_G:{loss_g_fake.item():.4f}, "
                                       f"Loss_DR:{loss_d.item():.4f}, Loss_DF:{loss_d_fake.item():.4f}")
 
-        self.real_state = states[0][-1].detach().cpu()
-        self.real_next_state = next_states[0][-1].detach().cpu()
-        self.generated_state = pred_fake_g[0][0].detach().cpu()
+                self.real_state = states[0][-1].detach().cpu()
+                self.real_next_state = next_states[0][-1].detach().cpu()
+                self.generated_state = pred_fake_g[0][0].detach().cpu()
+                self.save_generated(trainer.model_dir)
