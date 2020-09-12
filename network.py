@@ -101,7 +101,7 @@ class GeneratorDQN(DQN):
         self.equalized_lr = True
         self.init_bias_to_zero = True
         self.dim_output = 1
-        self.dim_latent = 4096
+        self.dim_latent = 4096 + self.action_size
         self.scales_depth = [self.depth_scale0]
 
         self.scale_layers = nn.ModuleList()
@@ -144,7 +144,7 @@ class GeneratorDQN(DQN):
     def set_alpha(self, alpha):
         self.alpha = alpha
 
-    def forward(self, x, skip_gan=False, use_log_softmax=False):
+    def forward(self, x, skip_gan=False, actions=None, use_log_softmax=False):
         x = self.net(x)
         x = x.view(-1, self.feat_size)
 
@@ -159,6 +159,7 @@ class GeneratorDQN(DQN):
 
         x = self.normalization_layer(x)
         x = x.view(-1, num_flat_features(x))
+        x = torch.cat((x, actions), dim=1)
         x = self.leaky_relu(self.format_layer(x))
         x = x.view(x.size()[0], -1, 3, 3)
         x = self.normalization_layer(x)

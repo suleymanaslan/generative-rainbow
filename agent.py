@@ -167,7 +167,8 @@ class Agent:
     def learn_gan(self, mem, trainer):
         for ix in range(5000):
             idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)
-            _, pred_fake_g = self.online_net(states, use_log_softmax=True)
+            actions_one_hot = torch.eye(self.action_size)[actions].to(self.device)
+            _, pred_fake_g = self.online_net(states, actions=actions_one_hot, use_log_softmax=True)
             self.optimizer_d.zero_grad()
 
             real_input = torch.cat((states, next_states[:, self.env.window - 1:self.env.window, :, :]), dim=1)
