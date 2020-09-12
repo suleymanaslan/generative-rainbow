@@ -1,6 +1,8 @@
 # adapted from https://github.com/Kaixhin/Rainbow and https://github.com/facebookresearch/pytorch_GAN_zoo
 
 import time
+from datetime import datetime
+
 import torch
 import imageio
 import numpy as np
@@ -122,14 +124,51 @@ class Agent:
         else:
             return action, features
 
-    def _learn(self, mem, train_gan, idxs, states, actions, returns, next_states, nonterminals, weights):
-        if train_gan:
+    def _learn(self, mem, idxs, states, actions, returns, next_states, nonterminals, weights):
+        log_ps, _ = self.online_net(states, skip_gan=True, use_log_softmax=True)
+        log_ps_a = log_ps[range(self.batch_size), actions]
+
+        with torch.no_grad():
+            pns, _ = self.online_net(next_states, skip_gan=True)
+            dns = self.support.expand_as(pns) * pns
+            argmax_indices_ns = dns.sum(2).argmax(1)
+            self.target_net.reset_noise()
+            pns, _ = self.target_net(next_states)
+            pns_a = pns[range(self.batch_size), argmax_indices_ns]
+
+            tz = returns.unsqueeze(1) + nonterminals * (self.discount ** self.n) * self.support.unsqueeze(0)
+            tz = tz.clamp(min=self.v_min, max=self.v_max)
+            b = (tz - self.v_min) / self.delta_z
+            l, u = b.floor().to(torch.int64), b.ceil().to(torch.int64)
+            l[(u > 0) * (l == u)] -= 1
+            u[(l < (self.atoms - 1)) * (l == u)] += 1
+
+            m = states.new_zeros(self.batch_size, self.atoms)
+            offset = torch.linspace(0, ((self.batch_size - 1) * self.atoms), self.batch_size) \
+                .unsqueeze(1).expand(self.batch_size, self.atoms).to(actions)
+            m.view(-1).index_add_(0, (l + offset).view(-1), (pns_a * (u.float() - b)).view(-1))
+            m.view(-1).index_add_(0, (u + offset).view(-1), (pns_a * (b - l.float())).view(-1))
+
+        loss = -torch.sum(m * log_ps_a, 1)
+
+        self.optimizer_o.zero_grad()
+
+        (weights * loss).mean().backward()
+        clip_grad_norm_(self.online_net.parameters(), self.norm_clip)
+
+        self.optimizer_o.step()
+
+        mem.update_priorities(idxs, loss.detach().cpu().numpy())
+
+    def learn(self, mem):
+        idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)
+        self._learn(mem, idxs, states, actions, returns, next_states, nonterminals, weights)
+
+    def learn_gan(self, mem, trainer):
+        for ix in range(5000):
+            idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)
             _, pred_fake_g = self.online_net(states, use_log_softmax=True)
             self.optimizer_d.zero_grad()
-
-            self.real_state = states[0][-1].detach().cpu()
-            self.real_next_state = next_states[0][-1].detach().cpu()
-            self.generated_state = pred_fake_g[0][0].detach().cpu()
 
             real_input = torch.cat((states, next_states[:, self.env.window - 1:self.env.window, :, :]), dim=1)
             pred_real_d = self.discrm_net(real_input, False)
@@ -162,42 +201,11 @@ class Agent:
 
             self.optimizer_o.step()
 
-        else:
-            log_ps, _ = self.online_net(states, skip_gan=True, use_log_softmax=True)
-            log_ps_a = log_ps[range(self.batch_size), actions]
+            if ix % 300 == 0:
+                trainer.print_and_log(f"{datetime.now()} [{ix:04d}/5000], "
+                                      f"Loss_G:{loss_g_fake.item():.4f}, "
+                                      f"Loss_DR:{loss_d.item():.4f}, Loss_DF:{loss_d_fake.item():.4f}")
 
-            with torch.no_grad():
-                pns, _ = self.online_net(next_states, skip_gan=True)
-                dns = self.support.expand_as(pns) * pns
-                argmax_indices_ns = dns.sum(2).argmax(1)
-                self.target_net.reset_noise()
-                pns, _ = self.target_net(next_states)
-                pns_a = pns[range(self.batch_size), argmax_indices_ns]
-
-                tz = returns.unsqueeze(1) + nonterminals * (self.discount ** self.n) * self.support.unsqueeze(0)
-                tz = tz.clamp(min=self.v_min, max=self.v_max)
-                b = (tz - self.v_min) / self.delta_z
-                l, u = b.floor().to(torch.int64), b.ceil().to(torch.int64)
-                l[(u > 0) * (l == u)] -= 1
-                u[(l < (self.atoms - 1)) * (l == u)] += 1
-
-                m = states.new_zeros(self.batch_size, self.atoms)
-                offset = torch.linspace(0, ((self.batch_size - 1) * self.atoms), self.batch_size) \
-                    .unsqueeze(1).expand(self.batch_size, self.atoms).to(actions)
-                m.view(-1).index_add_(0, (l + offset).view(-1), (pns_a * (u.float() - b)).view(-1))
-                m.view(-1).index_add_(0, (u + offset).view(-1), (pns_a * (b - l.float())).view(-1))
-
-            loss = -torch.sum(m * log_ps_a, 1)
-
-            self.optimizer_o.zero_grad()
-
-            (weights * loss).mean().backward()
-            clip_grad_norm_(self.online_net.parameters(), self.norm_clip)
-
-            self.optimizer_o.step()
-
-            mem.update_priorities(idxs, loss.detach().cpu().numpy())
-
-    def learn(self, mem, train_gan):
-        idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)
-        self._learn(mem, train_gan, idxs, states, actions, returns, next_states, nonterminals, weights)
+        self.real_state = states[0][-1].detach().cpu()
+        self.real_next_state = next_states[0][-1].detach().cpu()
+        self.generated_state = pred_fake_g[0][0].detach().cpu()
