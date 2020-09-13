@@ -154,3 +154,34 @@ class ObstacleTowerEnv(Env):
         observation = observation.squeeze()
         observation = torch.tensor(observation, dtype=torch.float32, device=self.device).div_(255)
         return observation
+
+
+class StarPilotEnv(Env):
+    def __init__(self, action_size, history_length, num_levels, start_level, distribution_mode):
+        self.num_levels = num_levels
+        self.start_level = start_level
+        self.distribution_mode = distribution_mode
+        super(StarPilotEnv, self).__init__(action_size, history_length)
+
+    def _get_env(self):
+        return gym.make("procgen:procgen-starpilot-v0", num_levels=self.num_levels, start_level=self.start_level,
+                        distribution_mode=self.distribution_mode)
+
+    def _reset_buffer(self):
+        for _ in range(self.window):
+            self.state_buffer.append(torch.zeros(64, 64, device=self.device))
+
+    def _process_observation(self, observation):
+        observation = cv2.cvtColor(observation, cv2.COLOR_RGB2GRAY)
+        observation = torch.tensor(observation, dtype=torch.float32, device=self.device).div_(255)
+        return observation
+
+    def render(self):
+        render_img = cv2.resize((self.state_buffer[-1].cpu().numpy() * 255).astype(np.uint8), (0, 0), fx=4.0, fy=4.0)
+        display.clear_output(wait=True)
+        display.display(Image.fromarray(render_img))
+        time.sleep(1 / 60)
+
+    def step(self, action):
+        frame_buffer = torch.zeros(2, 64, 64, device=self.device)
+        return self._step(action, frame_buffer)
