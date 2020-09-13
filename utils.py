@@ -64,7 +64,7 @@ class Trainer:
                 observation = next_observation
             self.ep_rewards.append(ep_reward)
             self.ep_steps.append(steps)
-            if episode_ix == 1 or episode_ix % 1 == 0:
+            if episode_ix == 1 or episode_ix % 10 == 0:
                 self.print_and_log(f"{datetime.now()}, episode:{episode_ix:4d}, step:{steps:5d}, "
                                    f"reward:{ep_reward:10.4f}")
         self.print_and_log(f"{datetime.now()}, end training")

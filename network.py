@@ -66,10 +66,10 @@ class DQN(nn.Module):
         self.fc_z_a = NoisyLinear(self.hidden_size, self.action_size * self.atoms, std_init=noisy_std)
 
     def _get_net(self):
-        net = nn.Sequential(nn.Conv2d(self.history_length, 32, 5, stride=2), nn.ReLU(),
-                            nn.Conv2d(32, 32, 3, stride=2), nn.ReLU(),
-                            nn.Conv2d(32, 64, 3, stride=2), nn.ReLU(),
-                            nn.Conv2d(64, 64, 3, stride=1), nn.ReLU(),
+        net = nn.Sequential(nn.Conv2d(self.history_length, 32, 6, stride=2), nn.ReLU(),
+                            nn.Conv2d(32, 32, 4, stride=2), nn.ReLU(),
+                            nn.Conv2d(32, 64, 4, stride=1), nn.ReLU(),
+                            nn.Conv2d(64, 64, 4, stride=1), nn.ReLU(),
                             )
 
         feat_size = 4096
@@ -101,7 +101,7 @@ class GeneratorDQN(DQN):
         self.equalized_lr = True
         self.init_bias_to_zero = True
         self.dim_output = 1
-        self.dim_latent = 4096 + self.action_size
+        self.dim_latent = self.feat_size + self.action_size
         self.scales_depth = [self.depth_scale0]
 
         self.scale_layers = nn.ModuleList()
@@ -110,7 +110,7 @@ class GeneratorDQN(DQN):
         self.to_rgb_layers.append(EqualizedConv2d(self.depth_scale0, self.dim_output, 1, equalized=self.equalized_lr,
                                                   initBiasToZero=self.init_bias_to_zero))
 
-        self.format_layer = EqualizedLinear(self.dim_latent, 9 * self.scales_depth[0], equalized=self.equalized_lr,
+        self.format_layer = EqualizedLinear(self.dim_latent, 16 * self.scales_depth[0], equalized=self.equalized_lr,
                                             initBiasToZero=self.init_bias_to_zero)
 
         self.group_scale0 = nn.ModuleList()
@@ -219,7 +219,7 @@ class PGANDiscriminator(nn.Module):
         self.group_scale0.append(
             EqualizedConv2d(self.dim_entry_scale0, self.depth_scale0, 3, padding=1, equalized=self.equalized_lr,
                             initBiasToZero=self.init_bias_to_zero))
-        self.group_scale0.append(EqualizedLinear(self.depth_scale0 * 9, self.depth_scale0, equalized=self.equalized_lr,
+        self.group_scale0.append(EqualizedLinear(self.depth_scale0 * 16, self.depth_scale0, equalized=self.equalized_lr,
                                                  initBiasToZero=self.init_bias_to_zero))
 
         self.alpha = 0

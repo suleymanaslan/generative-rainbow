@@ -5,7 +5,7 @@ import numpy as np
 from collections import namedtuple
 
 Transition = namedtuple('Transition', ('timestep', 'state', 'action', 'reward', 'nonterminal'))
-blank_trans = Transition(0, torch.zeros(96, 96, dtype=torch.uint8), None, 0, False)
+blank_trans = Transition(0, torch.zeros(64, 64, dtype=torch.uint8), None, 0, False)
 simple_blank_trans = Transition(0, torch.zeros(8, dtype=torch.float32), None, 0, False)
 
 
