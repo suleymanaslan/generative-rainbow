@@ -161,7 +161,7 @@ class GeneratorDQN(DQN):
         x = x.view(-1, num_flat_features(x))
         x = torch.cat((x, actions), dim=1)
         x = self.leaky_relu(self.format_layer(x))
-        x = x.view(x.size()[0], -1, 3, 3)
+        x = x.view(x.size()[0], -1, 4, 4)
         x = self.normalization_layer(x)
 
         for conv_layer in self.group_scale0:
