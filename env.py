@@ -183,5 +183,6 @@ class StarPilotEnv(Env):
         time.sleep(1 / 60)
 
     def step(self, action):
-        frame_buffer = torch.zeros(2, 64, 64, device=self.device)
-        return self._step(action, frame_buffer)
+        observation, reward, done, info = self.wrapped_env.step(action)
+        self.state_buffer.append(self._process_observation(observation))
+        return torch.stack(list(self.state_buffer), 0), reward, done, info
