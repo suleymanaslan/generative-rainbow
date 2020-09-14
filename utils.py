@@ -16,7 +16,6 @@ class Trainer:
         self.learning_start_step = learning_start_step
         self.target_update = target_update
         self.gan_steps = gan_steps
-        self.rewards = []
         self.ep_rewards = []
         self.ep_steps = []
         self.avg_ep_rewards = None
@@ -46,7 +45,6 @@ class Trainer:
                     agent.reset_noise()
                 action, _ = agent.act(observation)
                 next_observation, reward, done, info = env.step(action)
-                self.rewards.append(reward)
                 ep_reward += reward
                 ep_step += 1
                 steps += 1
