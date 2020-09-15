@@ -165,7 +165,7 @@ class StarPilotEnv(Env):
 
     def _get_env(self):
         return gym.make("procgen:procgen-starpilot-v0", num_levels=self.num_levels, start_level=self.start_level,
-                        distribution_mode=self.distribution_mode)
+                        distribution_mode=self.distribution_mode, use_backgrounds=False)
 
     def _reset_buffer(self):
         for _ in range(self.window):
@@ -183,6 +183,5 @@ class StarPilotEnv(Env):
         time.sleep(1 / 60)
 
     def step(self, action):
-        observation, reward, done, info = self.wrapped_env.step(action)
-        self.state_buffer.append(self._process_observation(observation))
-        return torch.stack(list(self.state_buffer), 0), reward, done, info
+        frame_buffer = torch.zeros(2, 64, 64, device=self.device)
+        return self._step(action, frame_buffer)
