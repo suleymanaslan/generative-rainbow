@@ -2,6 +2,7 @@ import time
 import os
 import shutil
 import numpy as np
+import seaborn as sns
 import matplotlib.pyplot as plt
 from datetime import datetime
 
@@ -37,6 +38,7 @@ class Trainer:
 
         self.print_and_log(f"{datetime.now()}, start training")
         priority_weight_increase = (1 - mem.priority_weight) / (self.max_steps - self.learning_start_step)
+        finished = False
         steps = 0
         for episode_ix in range(1, self.episodes + 1):
             observation, ep_reward, ep_step, done = env.reset(), 0, 0, False
@@ -48,6 +50,9 @@ class Trainer:
                 ep_reward += reward
                 ep_step += 1
                 steps += 1
+                if steps >= self.max_steps:
+                    finished = True
+                    break
                 if self.reward_clip > 0:
                     reward = max(min(reward, self.reward_clip), -self.reward_clip) / self.reward_clip
                 mem.append(observation, action, reward, done)
@@ -63,17 +68,29 @@ class Trainer:
             self.ep_rewards.append(ep_reward)
             self.ep_steps.append(steps)
             if episode_ix == 1 or episode_ix % 10 == 0:
-                self.print_and_log(f"{datetime.now()}, episode:{episode_ix:4d}, step:{steps:5d}, "
-                                   f"reward:{ep_reward:10.4f}")
+                self.print_and_log(f"{datetime.now()}, episode:{episode_ix:5d}, step:{steps:6d}, "
+                                   f"reward:{ep_reward:2.0f}"),
+            if finished:
+                break
         self.print_and_log(f"{datetime.now()}, end training")
 
     def save(self, agent):
         agent.save(self.model_dir)
 
-        plt.style.use('default')
+        np.save(f"{self.model_dir}/ep_rewards.npy", self.ep_rewards)
+        np.save(f"{self.model_dir}/ep_steps.npy", self.ep_steps)
+
         self.avg_ep_rewards = [np.array(self.ep_rewards[max(0, i - 150):max(1, i)]).mean()
                                for i in range(len(self.ep_rewards))]
+        max_reward = 20
+
+        plt.style.use('default')
+        sns.set()
         plt.figure(figsize=(10, 6))
+        plt.gca().set_ylim([0, max_reward])
+        plt.gca().set_xlim([0, self.max_steps])
+        plt.yticks(np.arange(0, max_reward+1, max_reward//10))
+        plt.xticks(np.arange(0, self.max_steps+1, self.max_steps//8))
         plt.plot(self.ep_steps, self.ep_rewards, alpha=0.5)
         plt.plot(self.ep_steps, self.avg_ep_rewards, linewidth=3)
         plt.xlabel('steps')
