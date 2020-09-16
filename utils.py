@@ -67,6 +67,8 @@ class Trainer:
                 observation = next_observation
             self.ep_rewards.append(ep_reward)
             self.ep_steps.append(steps)
+            if episode_ix == 1 or episode_ix % 1000 == 0:
+                self.plot()
             if episode_ix == 1 or episode_ix % 10 == 0:
                 self.print_and_log(f"{datetime.now()}, episode:{episode_ix:5d}, step:{steps:6d}, "
                                    f"reward:{ep_reward:2.0f}"),
@@ -74,28 +76,32 @@ class Trainer:
                 break
         self.print_and_log(f"{datetime.now()}, end training")
 
+    def plot(self, close=True):
+        self.avg_ep_rewards = [np.array(self.ep_rewards[max(0, i - 150):max(1, i)]).mean()
+                               for i in range(len(self.ep_rewards))]
+        max_reward = 20
+        plt.style.use('default')
+        sns.set()
+        plt.figure(figsize=(10, 6))
+        plt.gca().set_ylim([0, max_reward])
+        plt.gca().set_xlim([0, self.max_steps])
+        plt.yticks(np.arange(0, max_reward + 1, max_reward // 10))
+        plt.xticks(np.arange(0, self.max_steps + 1, self.max_steps // 6))
+        plt.plot(self.ep_steps, self.ep_rewards, alpha=0.5)
+        plt.plot(self.ep_steps, self.avg_ep_rewards, linewidth=3)
+        plt.xlabel('steps')
+        plt.ylabel('episode reward')
+        plt.savefig(f"{self.model_dir}/training.png")
+        if close:
+            plt.close()
+
     def save(self, agent):
         agent.save(self.model_dir)
 
         np.save(f"{self.model_dir}/ep_rewards.npy", self.ep_rewards)
         np.save(f"{self.model_dir}/ep_steps.npy", self.ep_steps)
 
-        self.avg_ep_rewards = [np.array(self.ep_rewards[max(0, i - 150):max(1, i)]).mean()
-                               for i in range(len(self.ep_rewards))]
-        max_reward = 20
-
-        plt.style.use('default')
-        sns.set()
-        plt.figure(figsize=(10, 6))
-        plt.gca().set_ylim([0, max_reward])
-        plt.gca().set_xlim([0, self.max_steps])
-        plt.yticks(np.arange(0, max_reward+1, max_reward//10))
-        plt.xticks(np.arange(0, self.max_steps+1, self.max_steps//8))
-        plt.plot(self.ep_steps, self.ep_rewards, alpha=0.5)
-        plt.plot(self.ep_steps, self.avg_ep_rewards, linewidth=3)
-        plt.xlabel('steps')
-        plt.ylabel('episode reward')
-        plt.savefig(f"{self.model_dir}/training.png")
+        self.plot(close=False)
         plt.show()
 
     def eval(self, env, agent):

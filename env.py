@@ -165,7 +165,7 @@ class StarPilotEnv(Env):
 
     def _get_env(self):
         return gym.make("procgen:procgen-starpilot-v0", num_levels=self.num_levels, start_level=self.start_level,
-                        distribution_mode=self.distribution_mode, use_backgrounds=False)
+                        distribution_mode=self.distribution_mode)
 
     def _reset_buffer(self):
         for _ in range(self.window):
