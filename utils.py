@@ -8,16 +8,16 @@ from datetime import datetime
 
 
 class Trainer:
-    def __init__(self, episodes, replay_frequency, reward_clip, max_steps, learning_start_step,
-                 target_update, gan_steps, eval_steps):
-        self.episodes = episodes
+    def __init__(self, max_steps, replay_frequency, reward_clip, learning_start_step,
+                 target_update, gan_steps, eval_steps, plot_steps):
+        self.max_steps = max_steps
         self.replay_frequency = replay_frequency
         self.reward_clip = reward_clip
-        self.max_steps = max_steps
         self.learning_start_step = learning_start_step
         self.target_update = target_update
         self.gan_steps = gan_steps
         self.eval_steps = eval_steps
+        self.plot_steps = plot_steps
         self.ep_rewards = []
         self.ep_steps = []
         self.eval_ep_rewards = []
@@ -42,22 +42,24 @@ class Trainer:
         self.print_and_log(f"{datetime.now()}, start training")
         priority_weight_increase = (1 - mem.priority_weight) / (self.max_steps - self.learning_start_step)
         finished = False
+        episode = 0
         steps = 0
-        for episode_ix in range(1, self.episodes + 1):
-            observation, ep_reward, ep_step, done = env.reset(), 0, 0, False
+        while not finished:
+            observation, ep_reward, done = env.reset(), 0, False
             while not done:
                 if steps % self.replay_frequency == 0:
                     agent.reset_noise()
                 action, _ = agent.act(observation)
                 next_observation, reward, done, info = env.step(action)
                 ep_reward += reward
-                ep_step += 1
                 steps += 1
+                if steps % self.eval_steps == 0:
+                    self.eval(test_env, agent, steps)
+                if steps % self.plot_steps == 0:
+                    self.plot()
                 if steps >= self.max_steps:
                     finished = True
                     break
-                if steps % self.eval_steps == 0:
-                    self.eval(test_env, agent, steps)
                 if self.reward_clip > 0:
                     reward = max(min(reward, self.reward_clip), -self.reward_clip) / self.reward_clip
                 mem.append(observation, action, reward, done)
@@ -70,15 +72,12 @@ class Trainer:
                     if steps % self.target_update == 0:
                         agent.update_target_net()
                 observation = next_observation
+            episode += 1
             self.ep_rewards.append(ep_reward)
             self.ep_steps.append(steps)
-            if episode_ix == 1 or episode_ix % 1000 == 0:
-                self.plot()
-            if episode_ix == 1 or episode_ix % 10 == 0:
-                self.print_and_log(f"{datetime.now()}, episode:{episode_ix:5d}, step:{steps:6d}, "
+            if episode == 1 or episode % 100 == 0:
+                self.print_and_log(f"{datetime.now()}, episode:{episode:5d}, step:{steps:6d}, "
                                    f"reward:{ep_reward:4.1f}"),
-            if finished:
-                break
         self.print_and_log(f"{datetime.now()}, end training")
 
     def plot(self, close=True):
