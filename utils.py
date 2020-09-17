@@ -47,8 +47,6 @@ class Trainer:
         while not finished:
             observation, ep_reward, done = env.reset(), 0, False
             while not done:
-                if steps % self.replay_frequency == 0:
-                    agent.reset_noise()
                 action, _ = agent.act(observation)
                 next_observation, reward, done, info = env.step(action)
                 ep_reward += reward
@@ -60,6 +58,8 @@ class Trainer:
                 if steps >= self.max_steps:
                     finished = True
                     break
+                if steps % self.replay_frequency == 0:
+                    agent.reset_noise()
                 if self.reward_clip > 0:
                     reward = max(min(reward, self.reward_clip), -self.reward_clip) / self.reward_clip
                 mem.append(observation, action, reward, done)
@@ -114,7 +114,7 @@ class Trainer:
 
     def eval(self, env, agent, steps):
         eval_reward = 0
-        for _ in range(env.num_levels):
+        for _ in range(env.num_levels*2):
             observation, ep_reward, ep_step, done = env.reset(), 0, 0, False
             while not done:
                 action, _ = agent.act(observation)
@@ -123,7 +123,7 @@ class Trainer:
                 ep_step += 1
                 observation = next_observation
             eval_reward += ep_reward
-        eval_reward /= env.num_levels
+        eval_reward /= (env.num_levels*2)
         self.eval_ep_rewards.append(eval_reward)
         self.eval_ep_steps.append(steps)
         self.print_and_log(f"{datetime.now()}, eval reward:{eval_reward:4.1f}")
