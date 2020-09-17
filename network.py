@@ -148,8 +148,6 @@ class GeneratorDQN(DQN):
         self.scale_layers = nn.ModuleList()
 
         self.to_rgb_layers = nn.ModuleList()
-        self.to_rgb_layers.append(EqualizedConv2d(self.depth_scale0, self.dim_output, 1, equalized=self.equalized_lr,
-                                                  initBiasToZero=self.init_bias_to_zero))
 
         self.format_layer = EqualizedLinear(self.dim_latent, 16 * self.scales_depth[0], equalized=self.equalized_lr,
                                             initBiasToZero=self.init_bias_to_zero)
@@ -167,7 +165,7 @@ class GeneratorDQN(DQN):
 
         self.generation_activation = None
 
-    def add_scale(self, depth_new_scale):
+    def add_scale(self, depth_new_scale, final_scale=False):
         depth_last_scale = self.scales_depth[-1]
         self.scales_depth.append(depth_new_scale)
 
@@ -179,8 +177,9 @@ class GeneratorDQN(DQN):
             EqualizedConv2d(depth_new_scale, depth_new_scale, 3, padding=1, equalized=self.equalized_lr,
                             initBiasToZero=self.init_bias_to_zero))
 
-        self.to_rgb_layers.append(EqualizedConv2d(depth_new_scale, self.dim_output, 1, equalized=self.equalized_lr,
-                                                  initBiasToZero=self.init_bias_to_zero))
+        if final_scale:
+            self.to_rgb_layers.append(EqualizedConv2d(depth_new_scale, self.dim_output, 1, equalized=self.equalized_lr,
+                                                      initBiasToZero=self.init_bias_to_zero))
 
     def set_alpha(self, alpha):
         self.alpha = alpha
@@ -248,8 +247,6 @@ class PGANDiscriminator(nn.Module):
         self.scale_layers = nn.ModuleList()
 
         self.from_rgb_layers = nn.ModuleList()
-        self.from_rgb_layers.append(EqualizedConv2d(self.dim_input, self.depth_scale0, 1, equalized=self.equalized_lr,
-                                                    initBiasToZero=self.init_bias_to_zero))
 
         self.merge_layers = nn.ModuleList()
 
@@ -267,7 +264,7 @@ class PGANDiscriminator(nn.Module):
 
         self.leaky_relu = torch.nn.LeakyReLU(0.2)
 
-    def add_scale(self, depth_new_scale):
+    def add_scale(self, depth_new_scale, final_scale=False):
         depth_last_scale = self.scales_depth[-1]
         self.scales_depth.append(depth_new_scale)
 
@@ -279,8 +276,9 @@ class PGANDiscriminator(nn.Module):
             EqualizedConv2d(depth_new_scale, depth_last_scale, 3, padding=1, equalized=self.equalized_lr,
                             initBiasToZero=self.init_bias_to_zero))
 
-        self.from_rgb_layers.append(EqualizedConv2d(self.dim_input, depth_new_scale, 1, equalized=self.equalized_lr,
-                                                    initBiasToZero=self.init_bias_to_zero))
+        if final_scale:
+            self.from_rgb_layers.append(EqualizedConv2d(self.dim_input, depth_new_scale, 1, equalized=self.equalized_lr,
+                                                        initBiasToZero=self.init_bias_to_zero))
 
     def set_alpha(self, alpha):
         self.alpha = alpha

@@ -35,9 +35,11 @@ class Agent:
 
         self.online_net, self.target_net, self.discrm_net = self._get_nets()
 
-        for _ in range(4):
+        for _ in range(3):
             self.discrm_net.add_scale(depth_new_scale=128)
             self.online_net.add_scale(depth_new_scale=128)
+        self.discrm_net.add_scale(depth_new_scale=128, final_scale=True)
+        self.online_net.add_scale(depth_new_scale=128, final_scale=True)
         self.discrm_net.to(self.device)
         self.online_net.to(self.device)
 
