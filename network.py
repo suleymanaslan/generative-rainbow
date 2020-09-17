@@ -51,6 +51,27 @@ class NoisyLinear(nn.Module):
             return F.linear(x, self.weight_mu, self.bias_mu)
 
 
+class BasicBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, stride):
+        super(BasicBlock, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False)
+        self.downsample = None if stride == 1 else nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride,
+                                                             bias=False)
+
+    def forward(self, x):
+        identity = x
+        out = self.conv1(x)
+        out = self.relu(out)
+        out = self.conv2(out)
+        if self.downsample is not None:
+            identity = self.downsample(x)
+        out += identity
+        out = self.relu(out)
+        return out
+
+
 class DQN(nn.Module):
     def __init__(self, atoms, action_size, history_length, hidden_size, noisy_std):
         super(DQN, self).__init__()
@@ -58,7 +79,22 @@ class DQN(nn.Module):
         self.action_size = action_size
         self.history_length = history_length
         self.hidden_size = hidden_size
+
+        self.conv1 = nn.Conv2d(self.history_length, 64, kernel_size=5, stride=2, padding=2, bias=False)
+        self.layer1 = BasicBlock(64, 64, 1)
+        self.layer2 = BasicBlock(64, 64, 1)
+        self.layer3 = BasicBlock(64, 128, 2)
+        self.layer4 = BasicBlock(128, 128, 1)
+        self.layer5 = BasicBlock(128, 256, 2)
+        self.layer6 = BasicBlock(256, 256, 1)
+        self.layer7 = BasicBlock(256, 256, 2)
+        self.layer8 = BasicBlock(256, 256, 1)
+
         self.net, self.feat_size = self._get_net()
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
 
         self.fc_h_v = NoisyLinear(self.feat_size, self.hidden_size, std_init=noisy_std)
         self.fc_h_a = NoisyLinear(self.feat_size, self.hidden_size, std_init=noisy_std)
@@ -66,10 +102,15 @@ class DQN(nn.Module):
         self.fc_z_a = NoisyLinear(self.hidden_size, self.action_size * self.atoms, std_init=noisy_std)
 
     def _get_net(self):
-        net = nn.Sequential(nn.Conv2d(self.history_length, 32, 6, stride=2), nn.ReLU(),
-                            nn.Conv2d(32, 32, 4, stride=2), nn.ReLU(),
-                            nn.Conv2d(32, 64, 4, stride=1), nn.ReLU(),
-                            nn.Conv2d(64, 64, 4, stride=1), nn.ReLU(),
+        net = nn.Sequential(self.conv1, nn.ReLU(inplace=True),
+                            self.layer1,
+                            self.layer2,
+                            self.layer3,
+                            self.layer4,
+                            self.layer5,
+                            self.layer6,
+                            self.layer7,
+                            self.layer8,
                             )
 
         feat_size = 4096
