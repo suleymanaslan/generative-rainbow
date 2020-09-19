@@ -110,10 +110,9 @@ class DQN(nn.Module):
                                 self.layer5, self.layer6, self.layer7, self.layer8,
                                 )
         else:
-            net = nn.Sequential(nn.Conv2d(self.history_length, 32, 6, stride=2), nn.ReLU(inplace=True),
-                                nn.Conv2d(32, 32, 4, stride=2), nn.ReLU(inplace=True),
-                                nn.Conv2d(32, 64, 4, stride=1), nn.ReLU(inplace=True),
-                                nn.Conv2d(64, 64, 4, stride=1), nn.ReLU(inplace=True),
+            net = nn.Sequential(nn.Conv2d(self.history_length, 64, 5, stride=2, padding=2), nn.ReLU(inplace=True),
+                                nn.Conv2d(64, 64, 3, stride=2, padding=1), nn.ReLU(inplace=True),
+                                nn.Conv2d(64, 64, 3, stride=2, padding=1), nn.ReLU(inplace=True),
                                 )
 
         feat_size = 4096
