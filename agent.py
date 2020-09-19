@@ -167,7 +167,8 @@ class Agent:
         self._learn(mem, idxs, states, actions, returns, next_states, nonterminals, weights)
 
     def learn_gan(self, mem, trainer):
-        for ix in range(2500):
+        steps = 5000
+        for ix in range(1, steps + 1):
             idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)
             actions_one_hot = torch.eye(self.action_size)[actions].to(self.device)
             _, pred_fake_g = self.online_net(states, actions=actions_one_hot, use_log_softmax=True)
@@ -204,7 +205,7 @@ class Agent:
 
             self.optimizer_o.step()
 
-            if ix % 300 == 0:
+            if ix == 1 or ix % (steps // 10) == 0:
                 trainer.print_and_log(f"{datetime.now()} [{ix:04d}/5000], "
                                       f"Loss_G:{loss_g_fake.item():.4f}, "
                                       f"Loss_DR:{loss_d.item():.4f}, Loss_DF:{loss_d_fake.item():.4f}")
