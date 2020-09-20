@@ -7,6 +7,7 @@ import torch
 import imageio
 import numpy as np
 import torch.optim as optim
+import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
 
 from network import DQN, GeneratorDQN, PGANDiscriminator
@@ -35,11 +36,9 @@ class Agent:
 
         self.online_net, self.target_net, self.discrm_net = self._get_nets()
 
-        for _ in range(3):
-            self.discrm_net.add_scale(depth_new_scale=128)
-            self.online_net.add_scale(depth_new_scale=128)
-        self.discrm_net.add_scale(depth_new_scale=128, final_scale=True)
-        self.online_net.add_scale(depth_new_scale=128, final_scale=True)
+        self.scale = 0
+        self.max_scale = 4
+
         self.discrm_net.to(self.device)
         self.online_net.to(self.device)
 
@@ -166,20 +165,30 @@ class Agent:
         idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)
         self._learn(mem, idxs, states, actions, returns, next_states, nonterminals, weights)
 
-    def learn_gan(self, mem, trainer):
-        steps = 5000
+    def learn_gan(self, mem, trainer, steps=5000):
         for ix in range(1, steps + 1):
             idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)
             actions_one_hot = torch.eye(self.action_size)[actions].to(self.device)
-            _, pred_fake_g = self.online_net(states, actions=actions_one_hot, use_log_softmax=True)
             self.optimizer_d.zero_grad()
 
-            real_input = torch.cat((states, next_states[:, self.env.window - 1:self.env.window, :, :]), dim=1)
+            with torch.no_grad():
+                if self.scale < self.max_scale:
+                    pgan_states = F.avg_pool2d(states, 2)
+                    pgan_next_states = F.avg_pool2d(next_states[:, self.env.window - 1:self.env.window, :, :], 2)
+                    for _ in range(1, self.max_scale - self.scale):
+                        pgan_states = F.avg_pool2d(pgan_states, 2)
+                        pgan_next_states = F.avg_pool2d(pgan_next_states, 2)
+                else:
+                    pgan_states = states
+                    pgan_next_states = next_states[:, self.env.window - 1:self.env.window, :, :]
+
+            real_input = torch.cat((pgan_states, pgan_next_states), dim=1)
             pred_real_d = self.discrm_net(real_input, False)
             loss_d = self.loss_criterion.getCriterion(pred_real_d, True)
             all_loss_d = loss_d
 
-            fake_input = torch.cat((states, pred_fake_g.detach()), dim=1)
+            _, pred_fake_g = self.online_net(states, actions=actions_one_hot, use_log_softmax=True)
+            fake_input = torch.cat((pgan_states, pred_fake_g.detach()), dim=1)
             pred_fake_d = self.discrm_net(fake_input, False)
             loss_d_fake = self.loss_criterion.getCriterion(pred_fake_d, False)
             all_loss_d += loss_d_fake
@@ -194,10 +203,9 @@ class Agent:
             self.optimizer_d.step()
 
             self.optimizer_d.zero_grad()
-
             self.optimizer_o.zero_grad()
 
-            pred_fake_d, phi_g_fake = self.discrm_net(torch.cat((states, pred_fake_g), dim=1), True)
+            pred_fake_d, phi_g_fake = self.discrm_net(torch.cat((pgan_states, pred_fake_g), dim=1), True)
             loss_g_fake = self.loss_criterion.getCriterion(pred_fake_d, True)
 
             loss_g_fake.backward(retain_graph=True)
@@ -206,11 +214,11 @@ class Agent:
             self.optimizer_o.step()
 
             if ix == 1 or ix % (steps // 10) == 0:
-                trainer.print_and_log(f"{datetime.now()} [{ix:04d}/5000], "
+                trainer.print_and_log(f"{datetime.now()} [{ix:04d}/{steps}], "
                                       f"Loss_G:{loss_g_fake.item():.4f}, "
                                       f"Loss_DR:{loss_d.item():.4f}, Loss_DF:{loss_d_fake.item():.4f}")
 
-                self.real_state = states[0][-1].detach().cpu()
-                self.real_next_state = next_states[0][-1].detach().cpu()
+                self.real_state = pgan_states[0][-1].detach().cpu()
+                self.real_next_state = pgan_next_states[0][-1].detach().cpu()
                 self.generated_state = pred_fake_g[0][0].detach().cpu()
                 self.save_generated(trainer.model_dir)

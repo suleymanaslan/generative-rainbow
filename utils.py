@@ -66,8 +66,8 @@ class Trainer:
                 mem.append(observation, action, reward, done)
                 if steps >= self.learning_start_step:
                     mem.priority_weight = min(mem.priority_weight + priority_weight_increase, 1)
-                    # if steps % self.gan_steps == 0:
-                    #     agent.learn_gan(mem, self)
+                    if steps % self.gan_steps == 0:
+                        agent.learn_gan(mem, self)
                     if steps % self.replay_frequency == 0:
                         agent.learn(mem)
                     if steps % self.target_update == 0:
