@@ -113,8 +113,8 @@ class DQN(nn.Module):
         x = self.net(x)
         x = x.view(-1, self.feat_size)
 
-        v = self.fc_z_v(F.relu(self.fc_h_v(x)))
-        a = self.fc_z_a(F.relu(self.fc_h_a(x)))
+        v = self.fc_z_v(F.relu(self.fc_h_v(x), inplace=True))
+        a = self.fc_z_a(F.relu(self.fc_h_a(x), inplace=True))
         v, a = v.view(-1, 1, self.atoms), a.view(-1, self.action_size, self.atoms)
         q = v + a - a.mean(1, keepdim=True)
         q = F.log_softmax(q, dim=2) if use_log_softmax else F.softmax(q, dim=2)
@@ -181,8 +181,8 @@ class GeneratorDQN(DQN):
         x = self.net(x)
         x = x.view(-1, self.feat_size)
 
-        v = self.fc_z_v(F.relu(self.fc_h_v(x)))
-        a = self.fc_z_a(F.relu(self.fc_h_a(x)))
+        v = self.fc_z_v(F.relu(self.fc_h_v(x), inplace=True))
+        a = self.fc_z_a(F.relu(self.fc_h_a(x), inplace=True))
         v, a = v.view(-1, 1, self.atoms), a.view(-1, self.action_size, self.atoms)
         q = v + a - a.mean(1, keepdim=True)
         q = F.log_softmax(q, dim=2) if use_log_softmax else F.softmax(q, dim=2)
