@@ -82,15 +82,9 @@ class DQN(nn.Module):
         self.residual_network = residual_network
 
         if self.residual_network:
-            self.conv1 = nn.Conv2d(self.history_length, 64, kernel_size=5, stride=2, padding=2, bias=False)
-            self.layer1 = BasicBlock(64, 64, 1)
-            self.layer2 = BasicBlock(64, 64, 1)
-            self.layer3 = BasicBlock(64, 128, 2)
-            self.layer4 = BasicBlock(128, 128, 1)
-            self.layer5 = BasicBlock(128, 256, 2)
-            self.layer6 = BasicBlock(256, 256, 1)
-            self.layer7 = BasicBlock(256, 256, 2)
-            self.layer8 = BasicBlock(256, 256, 1)
+            self.layer1 = BasicBlock(self.history_length, 64, 2)
+            self.layer2 = BasicBlock(64, 64, 2)
+            self.layer3 = BasicBlock(64, 64, 2)
 
         self.net, self.feat_size = self._get_net()
 
@@ -105,12 +99,9 @@ class DQN(nn.Module):
 
     def _get_net(self):
         if self.residual_network:
-            net = nn.Sequential(self.conv1, nn.ReLU(inplace=True),
-                                self.layer1, self.layer2, self.layer3, self.layer4,
-                                self.layer5, self.layer6, self.layer7, self.layer8,
-                                )
+            net = nn.Sequential(self.layer1, self.layer2, self.layer3)
         else:
-            net = nn.Sequential(nn.Conv2d(self.history_length, 64, 5, stride=2, padding=2), nn.ReLU(inplace=True),
+            net = nn.Sequential(nn.Conv2d(self.history_length, 64, 3, stride=2, padding=1), nn.ReLU(inplace=True),
                                 nn.Conv2d(64, 64, 3, stride=2, padding=1), nn.ReLU(inplace=True),
                                 nn.Conv2d(64, 64, 3, stride=2, padding=1), nn.ReLU(inplace=True),
                                 )
@@ -138,8 +129,8 @@ class DQN(nn.Module):
 
 
 class GeneratorDQN(DQN):
-    def __init__(self, atoms, action_size, history_length, hidden_size, noisy_std):
-        super(GeneratorDQN, self).__init__(atoms, action_size, history_length, hidden_size, noisy_std)
+    def __init__(self, atoms, action_size, history_length, hidden_size, noisy_std, residual_network=False):
+        super(GeneratorDQN, self).__init__(atoms, action_size, history_length, hidden_size, noisy_std, residual_network)
         self.depth_scale0 = 128
         self.equalized_lr = True
         self.init_bias_to_zero = True

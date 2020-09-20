@@ -81,10 +81,9 @@ class Trainer:
                                    f"reward:{ep_reward:4.1f}"),
         self.print_and_log(f"{datetime.now()}, end training")
 
-    def plot(self, close=True):
+    def plot(self, max_reward=20, close=True):
         self.avg_ep_rewards = [np.array(self.ep_rewards[max(0, i - 150):max(1, i)]).mean()
                                for i in range(len(self.ep_rewards))]
-        max_reward = 10
         plt.style.use('default')
         sns.set()
         plt.figure(figsize=(10, 6))
