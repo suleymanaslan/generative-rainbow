@@ -157,15 +157,16 @@ class ObstacleTowerEnv(Env):
 
 
 class StarPilotEnv(Env):
-    def __init__(self, action_size, history_length, num_levels, start_level, distribution_mode):
+    def __init__(self, action_size, history_length, num_levels, start_level, distribution_mode, use_backgrounds):
         self.num_levels = num_levels
         self.start_level = start_level
         self.distribution_mode = distribution_mode
+        self.use_backgrounds = use_backgrounds
         super(StarPilotEnv, self).__init__(action_size, history_length)
 
     def _get_env(self):
         return gym.make("procgen:procgen-starpilot-v0", num_levels=self.num_levels, start_level=self.start_level,
-                        distribution_mode=self.distribution_mode)
+                        distribution_mode=self.distribution_mode, use_backgrounds=self.use_backgrounds)
 
     def _reset_buffer(self):
         for _ in range(self.window):
