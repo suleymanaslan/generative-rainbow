@@ -233,12 +233,12 @@ class GeneratorDQN(DQN):
 
 
 class PGANDiscriminator(nn.Module):
-    def __init__(self, history_length):
+    def __init__(self):
         super(PGANDiscriminator, self).__init__()
         self.depth_scale0 = 128
         self.equalized_lr = True
         self.init_bias_to_zero = True
-        self.dim_input = history_length + 1
+        self.dim_input = 2
         self.size_decision_layer = 1
         self.mini_batch_normalization = True
         self.dim_entry_scale0 = self.depth_scale0 + 1
