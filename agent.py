@@ -75,9 +75,9 @@ class Agent:
 
     def _get_nets(self):
         online_net = GeneratorDQN(self.atoms, self.action_size, self.env.window, self.hidden_size,
-                                  self.noisy_std).to(self.device)
+                                  self.noisy_std, residual_network=False).to(self.device)
         target_net = DQN(self.atoms, self.action_size, self.env.window, self.hidden_size,
-                         self.noisy_std).to(self.device)
+                         self.noisy_std, residual_network=False).to(self.device)
         discrm_net = PGANDiscriminator(self.env.window)
         return online_net, target_net, discrm_net
 
