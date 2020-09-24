@@ -5,9 +5,24 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from pytorch_GAN_zoo.models.networks.custom_layers import EqualizedConv2d, EqualizedLinear, NormalizationLayer, \
-    Upscale2d
+    Upscale2d, ConstrainedLayer
 from pytorch_GAN_zoo.models.utils.utils import num_flat_features
 from pytorch_GAN_zoo.models.networks.mini_batch_stddev_module import miniBatchStdDev
+
+
+class EqualizedConv3d(ConstrainedLayer):
+    def __init__(self, in_channels, out_channels, kernel_size, padding, bias=True, **kwargs):
+        ConstrainedLayer.__init__(self, nn.Conv3d(in_channels, out_channels, kernel_size, padding=padding, bias=bias),
+                                  **kwargs)
+
+
+class SqueezeLayer(nn.Module):
+    def __init__(self, dim):
+        super(SqueezeLayer, self).__init__()
+        self.dim = dim
+
+    def forward(self, x):
+        return x.squeeze(self.dim)
 
 
 class NoisyLinear(nn.Module):
@@ -238,7 +253,7 @@ class PGANDiscriminator(nn.Module):
         self.depth_scale0 = 128
         self.equalized_lr = True
         self.init_bias_to_zero = True
-        self.dim_input = 2
+        self.dim_input = 1
         self.size_decision_layer = 1
         self.mini_batch_normalization = True
         self.dim_entry_scale0 = self.depth_scale0 + 1
@@ -247,8 +262,9 @@ class PGANDiscriminator(nn.Module):
         self.scale_layers = nn.ModuleList()
 
         self.from_rgb_layers = nn.ModuleList()
-        self.from_rgb_layers.append(EqualizedConv2d(self.dim_input, self.depth_scale0, 1, equalized=self.equalized_lr,
-                                                    initBiasToZero=self.init_bias_to_zero))
+        self.from_rgb_layers.append(
+            EqualizedConv3d(self.dim_input, self.depth_scale0, kernel_size=[2, 3, 3], padding=[0, 1, 1],
+                            equalized=self.equalized_lr, initBiasToZero=self.init_bias_to_zero))
 
         self.merge_layers = nn.ModuleList()
 
@@ -265,6 +281,7 @@ class PGANDiscriminator(nn.Module):
         self.alpha = 0
 
         self.leaky_relu = torch.nn.LeakyReLU(0.2, inplace=True)
+        self.squeeze = SqueezeLayer(2)
 
     def add_scale(self, depth_new_scale):
         depth_last_scale = self.scales_depth[-1]
@@ -278,18 +295,21 @@ class PGANDiscriminator(nn.Module):
             EqualizedConv2d(depth_new_scale, depth_last_scale, 3, padding=1, equalized=self.equalized_lr,
                             initBiasToZero=self.init_bias_to_zero))
 
-        self.from_rgb_layers.append(EqualizedConv2d(self.dim_input, depth_new_scale, 1, equalized=self.equalized_lr,
-                                                    initBiasToZero=self.init_bias_to_zero))
+        self.from_rgb_layers.append(
+            EqualizedConv3d(self.dim_input, depth_new_scale, kernel_size=[2, 3, 3], padding=[0, 1, 1],
+                            equalized=self.equalized_lr, initBiasToZero=self.init_bias_to_zero))
 
     def set_alpha(self, alpha):
         self.alpha = alpha
 
     def forward(self, x, get_feature=False):
         if self.alpha > 0 and len(self.from_rgb_layers) > 1:
-            y = F.avg_pool2d(x, (2, 2))
+            y = F.avg_pool3d(x, (1, 2, 2))
             y = self.leaky_relu(self.from_rgb_layers[- 2](y))
+            y = self.squeeze(y)
 
         x = self.leaky_relu(self.from_rgb_layers[-1](x))
+        x = self.squeeze(x)
 
         merge_layer = self.alpha > 0 and len(self.scale_layers) > 1
 

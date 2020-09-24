@@ -200,18 +200,21 @@ class Agent:
                 low_res_real = F.interpolate(low_res_real, scale_factor=2, mode='nearest')
                 pgan_next_states = self.model_alpha * low_res_real + (1 - self.model_alpha) * pgan_next_states
 
+            pgan_states = pgan_states.unsqueeze(1)
+
             self.discrm_net.set_alpha(self.model_alpha)
             self.online_net.set_alpha(self.model_alpha)
 
             self.optimizer_d.zero_grad()
 
-            real_input = torch.cat((pgan_states, pgan_next_states), dim=1)
+            real_input = torch.cat((pgan_states, pgan_next_states.unsqueeze(1)), dim=2)
             pred_real_d = self.discrm_net(real_input, False)
             loss_d = self.loss_criterion.getCriterion(pred_real_d, True)
             all_loss_d = loss_d
 
             _, pred_fake_g = self.online_net(states, actions=actions_one_hot, use_log_softmax=True)
-            fake_input = torch.cat((pgan_states, pred_fake_g.detach()), dim=1)
+            pred_fake_g = pred_fake_g.unsqueeze(1)
+            fake_input = torch.cat((pgan_states, pred_fake_g.detach()), dim=2)
             pred_fake_d = self.discrm_net(fake_input, False)
             loss_d_fake = self.loss_criterion.getCriterion(pred_fake_d, False)
             all_loss_d += loss_d_fake
@@ -228,7 +231,8 @@ class Agent:
             self.optimizer_d.zero_grad()
             self.optimizer_o.zero_grad()
 
-            pred_fake_d, phi_g_fake = self.discrm_net(torch.cat((pgan_states, pred_fake_g), dim=1), True)
+            pred_fake_d, phi_g_fake = self.discrm_net(
+                torch.cat((pgan_states, pred_fake_g), dim=2), True)
             loss_g_fake = self.loss_criterion.getCriterion(pred_fake_d, True)
 
             loss_g_fake.backward(retain_graph=True)
@@ -242,9 +246,9 @@ class Agent:
                                       f"L_DR:{loss_d.item():.2f}, L_DF:{loss_d_fake.item():.2f}, "
                                       f"L_DG:{loss_d_grad:.2f}, L_DE:{loss_epsilon.item():.2f}")
 
-                self.real_state = pgan_states[0][-1].detach().cpu()
+                self.real_state = pgan_states[0][0][-1].detach().cpu()
                 self.real_next_state = pgan_next_states[0][-1].detach().cpu()
-                self.generated_state = pred_fake_g[0][0].detach().cpu()
+                self.generated_state = pred_fake_g[0][0][0].detach().cpu()
                 self.save_generated(trainer.model_dir)
 
         if self.scale < self.max_scale:
