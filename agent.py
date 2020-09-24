@@ -183,13 +183,13 @@ class Agent:
                 self.model_alpha = max(0.0, self.model_alpha - self.alpha_update_cons)
 
             if self.scale < self.max_scale:
-                pgan_states = F.avg_pool2d(states[:, self.env.window - 1:self.env.window, :, :], 2)
+                pgan_states = F.avg_pool2d(states[:, self.env.window - 2:self.env.window, :, :], 2)
                 pgan_next_states = F.avg_pool2d(next_states[:, self.env.window - 1:self.env.window, :, :], 2)
                 for _ in range(1, self.max_scale - self.scale):
                     pgan_states = F.avg_pool2d(pgan_states, (2, 2))
                     pgan_next_states = F.avg_pool2d(pgan_next_states, (2, 2))
             else:
-                pgan_states = states[:, self.env.window - 1:self.env.window, :, :]
+                pgan_states = states[:, self.env.window - 2:self.env.window, :, :]
                 pgan_next_states = next_states[:, self.env.window - 1:self.env.window, :, :]
 
             if self.model_alpha > 0:

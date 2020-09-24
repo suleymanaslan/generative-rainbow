@@ -263,7 +263,7 @@ class PGANDiscriminator(nn.Module):
 
         self.from_rgb_layers = nn.ModuleList()
         self.from_rgb_layers.append(
-            EqualizedConv3d(self.dim_input, self.depth_scale0, kernel_size=[2, 3, 3], padding=[0, 1, 1],
+            EqualizedConv3d(self.dim_input, self.depth_scale0, kernel_size=3, padding=[0, 1, 1],
                             equalized=self.equalized_lr, initBiasToZero=self.init_bias_to_zero))
 
         self.merge_layers = nn.ModuleList()
@@ -296,7 +296,7 @@ class PGANDiscriminator(nn.Module):
                             initBiasToZero=self.init_bias_to_zero))
 
         self.from_rgb_layers.append(
-            EqualizedConv3d(self.dim_input, depth_new_scale, kernel_size=[2, 3, 3], padding=[0, 1, 1],
+            EqualizedConv3d(self.dim_input, depth_new_scale, kernel_size=3, padding=[0, 1, 1],
                             equalized=self.equalized_lr, initBiasToZero=self.init_bias_to_zero))
 
     def set_alpha(self, alpha):
