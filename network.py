@@ -248,8 +248,9 @@ class GeneratorDQN(DQN):
 
 
 class PGANDiscriminator(nn.Module):
-    def __init__(self):
+    def __init__(self, action_size):
         super(PGANDiscriminator, self).__init__()
+        self.action_size = action_size
         self.depth_scale0 = 128
         self.equalized_lr = True
         self.init_bias_to_zero = True
@@ -275,8 +276,9 @@ class PGANDiscriminator(nn.Module):
         self.group_scale0.append(
             EqualizedConv2d(self.dim_entry_scale0, self.depth_scale0, 3, padding=1, equalized=self.equalized_lr,
                             initBiasToZero=self.init_bias_to_zero))
-        self.group_scale0.append(EqualizedLinear(self.depth_scale0 * 16, self.depth_scale0, equalized=self.equalized_lr,
-                                                 initBiasToZero=self.init_bias_to_zero))
+        self.group_scale0.append(
+            EqualizedLinear(self.depth_scale0 * 16 + self.action_size, self.depth_scale0, equalized=self.equalized_lr,
+                            initBiasToZero=self.init_bias_to_zero))
 
         self.alpha = 0
 
@@ -302,7 +304,7 @@ class PGANDiscriminator(nn.Module):
     def set_alpha(self, alpha):
         self.alpha = alpha
 
-    def forward(self, x, get_feature=False):
+    def forward(self, x, actions, get_feature=False):
         if self.alpha > 0 and len(self.from_rgb_layers) > 1:
             y = F.avg_pool3d(x, (1, 2, 2))
             y = self.leaky_relu(self.from_rgb_layers[- 2](y))
@@ -333,6 +335,7 @@ class PGANDiscriminator(nn.Module):
         x = self.leaky_relu(self.group_scale0[0](x))
 
         x = x.view(-1, num_flat_features(x))
+        x = torch.cat((x, actions), dim=1)
 
         x = self.leaky_relu(self.group_scale0[1](x))
 

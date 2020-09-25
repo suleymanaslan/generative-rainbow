@@ -12,8 +12,32 @@ from torch.nn.utils import clip_grad_norm_
 
 from network import DQN, GeneratorDQN, PGANDiscriminator
 from pytorch_GAN_zoo.models.loss_criterions import base_loss_criterions
-from pytorch_GAN_zoo.models.loss_criterions.gradient_losses import WGANGPGradientPenalty
 from pytorch_GAN_zoo.models.utils.utils import finiteCheck
+
+
+def wgangp_gradient_penalty(net_input, fake, actions, discriminator, weight, backward=True):
+    batch_size = net_input.size(0)
+    alpha = torch.rand(batch_size, 1)
+    alpha = alpha.expand(batch_size, int(net_input.nelement() / batch_size)).contiguous().view(net_input.size())
+    alpha = alpha.to(net_input.device)
+    interpolates = alpha * net_input + ((1 - alpha) * fake)
+
+    interpolates = torch.autograd.Variable(interpolates, requires_grad=True)
+
+    decision_interpolate = discriminator(interpolates, actions, False)
+    decision_interpolate = decision_interpolate[:, 0].sum()
+
+    gradients = torch.autograd.grad(outputs=decision_interpolate, inputs=interpolates, create_graph=True,
+                                    retain_graph=True)
+
+    gradients = gradients[0].view(batch_size, -1)
+    gradients = (gradients * gradients).sum(dim=1).sqrt()
+    gradient_penalty = ((gradients - 1.0) ** 2).sum() * weight
+
+    if backward:
+        gradient_penalty.backward(retain_graph=True)
+
+    return gradient_penalty.item()
 
 
 class Agent:
@@ -78,7 +102,7 @@ class Agent:
                                   self.noisy_std, residual_network=False).to(self.device)
         target_net = DQN(self.atoms, self.action_size, self.env.window, self.hidden_size,
                          self.noisy_std, residual_network=False).to(self.device)
-        discrm_net = PGANDiscriminator()
+        discrm_net = PGANDiscriminator(self.action_size)
         return online_net, target_net, discrm_net
 
     def train(self):
@@ -208,18 +232,19 @@ class Agent:
             self.optimizer_d.zero_grad()
 
             real_input = torch.cat((pgan_states, pgan_next_states.unsqueeze(1)), dim=2)
-            pred_real_d = self.discrm_net(real_input, False)
+            pred_real_d = self.discrm_net(real_input, actions_one_hot, False)
             loss_d = self.loss_criterion.getCriterion(pred_real_d, True)
             all_loss_d = loss_d
 
             _, pred_fake_g = self.online_net(states, actions=actions_one_hot, use_log_softmax=True)
             pred_fake_g = pred_fake_g.unsqueeze(1)
             fake_input = torch.cat((pgan_states, pred_fake_g.detach()), dim=2)
-            pred_fake_d = self.discrm_net(fake_input, False)
+            pred_fake_d = self.discrm_net(fake_input, actions_one_hot, False)
             loss_d_fake = self.loss_criterion.getCriterion(pred_fake_d, False)
             all_loss_d += loss_d_fake
 
-            loss_d_grad = WGANGPGradientPenalty(real_input, fake_input, self.discrm_net, weight=10.0, backward=True)
+            loss_d_grad = wgangp_gradient_penalty(real_input, fake_input, actions_one_hot, self.discrm_net, weight=10.0,
+                                                  backward=True)
 
             loss_epsilon = (pred_real_d[:, 0] ** 2).sum() * self.epsilon_d
             all_loss_d += loss_epsilon
@@ -232,7 +257,7 @@ class Agent:
             self.optimizer_o.zero_grad()
 
             pred_fake_d, phi_g_fake = self.discrm_net(
-                torch.cat((pgan_states, pred_fake_g), dim=2), True)
+                torch.cat((pgan_states, pred_fake_g), dim=2), actions_one_hot, True)
             loss_g_fake = self.loss_criterion.getCriterion(pred_fake_d, True)
 
             loss_g_fake.backward(retain_graph=True)
