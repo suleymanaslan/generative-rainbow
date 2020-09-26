@@ -57,7 +57,7 @@ class Trainer:
                 if steps % self.eval_steps == 0:
                     self.eval(train_env, test_env, agent, steps)
                 if steps % self.plot_steps == 0:
-                    self.plot()
+                    self.save(agent)
                 if steps >= self.max_steps:
                     finished = True
                     break
@@ -89,7 +89,7 @@ class Trainer:
                                    f"reward:{ep_reward:4.1f}"),
         self.print_and_log(f"{datetime.now()}, end training")
 
-    def plot(self, max_reward=20, close=True):
+    def plot(self, max_reward=20):
         self.avg_ep_rewards = [np.array(self.ep_rewards[max(0, i - 150):max(1, i)]).mean()
                                for i in range(len(self.ep_rewards))]
         plt.style.use('default')
@@ -107,8 +107,7 @@ class Trainer:
         plt.xlabel('steps')
         plt.ylabel('episode reward')
         plt.savefig(f"{self.model_dir}/training.png")
-        if close:
-            plt.close()
+        plt.close()
 
     def save(self, agent):
         agent.save(self.model_dir)
@@ -119,7 +118,7 @@ class Trainer:
         np.save(f"{self.model_dir}/test_ep_rewards.npy", self.test_ep_rewards)
         np.save(f"{self.model_dir}/eval_ep_steps.npy", self.eval_ep_steps)
 
-        self.plot(close=False)
+        self.plot()
         plt.show()
 
     @staticmethod
