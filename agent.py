@@ -34,6 +34,9 @@ class Agent:
 
         self.online_net, self.target_net, self.discrm_net = self._get_nets()
 
+        self.gan_alpha = 0.1
+        self.steps = 0
+        self.steps_per_scale = int(25e3)
         self.scale = 0
         self.max_scale = 4
 
@@ -168,6 +171,136 @@ class Agent:
     def learn(self, mem):
         idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)
         self._learn(mem, idxs, states, actions, returns, next_states, nonterminals, weights)
+
+    def learn_joint(self, mem, trainer):
+        idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)
+        if self.scale > 0:
+            self.model_alpha = 1.0
+
+        self.steps += 1
+        actions_one_hot = torch.eye(self.action_size)[actions].to(self.device)
+
+        if (self.steps % (self.steps_per_scale // 1000) == 0) and self.model_alpha > 0:
+            self.model_alpha = max(0.0, self.model_alpha - self.alpha_update_cons)
+
+        if self.scale < self.max_scale:
+            pgan_states = F.avg_pool2d(states[:, self.env.window - 2:self.env.window, :, :], 2)
+            pgan_next_states = F.avg_pool2d(next_states[:, self.env.window - 1:self.env.window, :, :], 2)
+            for _ in range(1, self.max_scale - self.scale):
+                pgan_states = F.avg_pool2d(pgan_states, (2, 2))
+                pgan_next_states = F.avg_pool2d(pgan_next_states, (2, 2))
+        else:
+            pgan_states = states[:, self.env.window - 2:self.env.window, :, :]
+            pgan_next_states = next_states[:, self.env.window - 1:self.env.window, :, :]
+
+        if self.model_alpha > 0:
+            low_res_real = F.avg_pool2d(pgan_states, (2, 2))
+            low_res_real = F.interpolate(low_res_real, scale_factor=2, mode='nearest')
+            pgan_states = self.model_alpha * low_res_real + (1 - self.model_alpha) * pgan_states
+            low_res_real = F.avg_pool2d(pgan_next_states, (2, 2))
+            low_res_real = F.interpolate(low_res_real, scale_factor=2, mode='nearest')
+            pgan_next_states = self.model_alpha * low_res_real + (1 - self.model_alpha) * pgan_next_states
+
+        pgan_states = pgan_states.unsqueeze(1)
+
+        self.discrm_net.set_alpha(self.model_alpha)
+        self.online_net.set_alpha(self.model_alpha)
+
+        self.optimizer_d.zero_grad()
+
+        real_input = torch.cat((pgan_states, pgan_next_states.unsqueeze(1)), dim=2)
+        pred_real_d = self.discrm_net(real_input, actions_one_hot, False)
+        loss_d = self.loss_criterion.get_criterion(pred_real_d, True)
+        all_loss_d = loss_d
+
+        log_ps, pred_fake_g = self.online_net(states, actions=actions_one_hot, use_log_softmax=True)
+        pred_fake_g = pred_fake_g.unsqueeze(1)
+        fake_input = torch.cat((pgan_states, pred_fake_g.detach()), dim=2)
+        pred_fake_d = self.discrm_net(fake_input, actions_one_hot, False)
+        loss_d_fake = self.loss_criterion.get_criterion(pred_fake_d, False)
+        all_loss_d += loss_d_fake
+
+        loss_d_grad = wgangp_gradient_penalty(real_input, fake_input, actions_one_hot, self.discrm_net, weight=10.0,
+                                              backward=True)
+
+        loss_epsilon = (pred_real_d[:, 0] ** 2).sum() * self.epsilon_d
+        all_loss_d += loss_epsilon
+
+        all_loss_d.backward(retain_graph=True)
+        finite_check(self.discrm_net.parameters())
+        self.optimizer_d.step()
+
+        self.optimizer_d.zero_grad()
+        self.optimizer_o.zero_grad()
+
+        pred_fake_d, phi_g_fake = self.discrm_net(
+            torch.cat((pgan_states, pred_fake_g), dim=2), actions_one_hot, True)
+        loss_g_fake = self.loss_criterion.get_criterion(pred_fake_d, True)
+        all_loss_o = loss_g_fake * self.gan_alpha
+
+        log_ps_a = log_ps[range(self.batch_size), actions]
+
+        with torch.no_grad():
+            pns, _ = self.online_net(next_states, skip_gan=True)
+            dns = self.support.expand_as(pns) * pns
+            argmax_indices_ns = dns.sum(2).argmax(1)
+            self.target_net.reset_noise()
+            pns, _ = self.target_net(next_states)
+            pns_a = pns[range(self.batch_size), argmax_indices_ns]
+
+            tz = returns.unsqueeze(1) + nonterminals * (self.discount ** self.n) * self.support.unsqueeze(0)
+            tz = tz.clamp(min=self.v_min, max=self.v_max)
+            b = (tz - self.v_min) / self.delta_z
+            l, u = b.floor().to(torch.int64), b.ceil().to(torch.int64)
+            l[(u > 0) * (l == u)] -= 1
+            u[(l < (self.atoms - 1)) * (l == u)] += 1
+
+            m = states.new_zeros(self.batch_size, self.atoms)
+            offset = torch.linspace(0, ((self.batch_size - 1) * self.atoms), self.batch_size) \
+                .unsqueeze(1).expand(self.batch_size, self.atoms).to(actions)
+            m.view(-1).index_add_(0, (l + offset).view(-1), (pns_a * (u.float() - b)).view(-1))
+            m.view(-1).index_add_(0, (u + offset).view(-1), (pns_a * (b - l.float())).view(-1))
+
+        loss = -torch.sum(m * log_ps_a, 1)
+
+        all_loss_o += (weights * loss).mean() * (1 - self.gan_alpha)
+        all_loss_o.backward(retain_graph=True)
+        finite_check(self.online_net.parameters())
+        clip_grad_norm_(self.online_net.parameters(), self.norm_clip)
+
+        self.optimizer_o.step()
+
+        mem.update_priorities(idxs, loss.detach().cpu().numpy())
+
+        if self.steps == 1 or self.steps % (self.steps_per_scale // 10) == 0:
+            trainer.print_and_log(f"{datetime.now()} "
+                                  f"[{self.scale}/{self.max_scale}][{self.steps:05d}/{self.steps_per_scale}], "
+                                  f"A:{self.model_alpha:.1f}, L_G:{loss_g_fake.item():.2f}, "
+                                  f"L_DR:{loss_d.item():.2f}, L_DF:{loss_d_fake.item():.2f}, "
+                                  f"L_DG:{loss_d_grad:.2f}, L_DE:{loss_epsilon.item():.2f}")
+
+            self.real_state = pgan_states[0][0][-1].detach().cpu()
+            self.real_next_state = pgan_next_states[0][-1].detach().cpu()
+            self.generated_state = pred_fake_g[0][0][0].detach().cpu()
+            self.save_generated(trainer.model_dir)
+
+        if self.steps >= self.steps_per_scale:
+            self.steps = 0
+            if self.scale < self.max_scale:
+                self.discrm_net.add_scale(depth_new_scale=128)
+                self.online_net.add_scale(depth_new_scale=128)
+
+                self.discrm_net.to(self.device)
+                self.online_net.to(self.device)
+
+                self.optimizer_o = optim.Adam(filter(lambda p: p.requires_grad, self.online_net.parameters()),
+                                              betas=(0, 0.99), lr=self.lr, eps=self.adam_eps)
+                self.optimizer_d = optim.Adam(filter(lambda p: p.requires_grad, self.discrm_net.parameters()),
+                                              betas=(0, 0.99), lr=self.lr)
+
+                self.optimizer_d.zero_grad()
+                self.optimizer_o.zero_grad()
+                self.scale += 1
 
     def learn_gan(self, mem, trainer, steps=5000):
         if self.scale > 0:
