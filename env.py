@@ -6,7 +6,6 @@ import torch
 import cv2
 import gym
 import numpy as np
-from obstacle_tower_env import ObstacleTowerEnv as ObstacleTower
 from IPython import display
 from PIL import Image
 
@@ -100,60 +99,6 @@ class Env:
         frame_buffer = torch.zeros(2, 96, 96, device=self.device)
         action = self.action_to_mca(action)
         return self._step(action, frame_buffer)
-
-
-class ObstacleTowerEnv(Env):
-    def __init__(self, action_size, history_length):
-        super(ObstacleTowerEnv, self).__init__(action_size, history_length)
-        self.movement_dict = {0: "No-Op", 1: "Forward", 2: "Backward"}
-        self.cam_rot_dict = {0: "No-Op", 1: "Counter-Clockwise", 2: "Clockwise"}
-        self.jump_dict = {0: "No-Op", 1: "Jump"}
-        self.turn_dict = {0: "No-Op", 1: "Right", 2: "Left"}
-
-    def _get_env(self):
-        return ObstacleTower(f"obstacle-tower-env/obstacletower_v4.0_windows/ObstacleTower",
-                             retro=True, realtime_mode=False, greyscale=True)
-
-    def seed(self, seed):
-        self.wrapped_env.seed(seed)
-
-    def floor(self, floor):
-        self.wrapped_env.floor(floor)
-
-    @staticmethod
-    def action_to_mda(action, simple_action=True):
-        if simple_action:
-            movement = action // 3
-            cam_rot = action % 3
-            jump = 0
-            turn = 0
-        else:
-            movement = action // 18
-            cam_rot = (action // 6) % 3
-            jump = (action // 3) % 2
-            turn = action % 3
-        return np.array([movement, cam_rot, jump, turn])
-
-    @staticmethod
-    def mda_to_discrete(mda):
-        return mda[0] * 18 + mda[1] * 6 + mda[2] * 3 + mda[3]
-
-    def render(self):
-        render_img = cv2.resize(self.wrapped_env.render(), (0, 0), fx=4.0, fy=4.0)
-        display.clear_output(wait=True)
-        display.display(Image.fromarray(render_img))
-        time.sleep(1 / 60)
-
-    def step(self, action, simple_action=False, render=False):
-        frame_buffer = torch.zeros(2, 84, 84, device=self.device)
-        if simple_action:
-            action = self.mda_to_discrete(self.action_to_mda(action))
-        return self._step(action, frame_buffer, render)
-
-    def _process_observation(self, observation):
-        observation = observation.squeeze()
-        observation = torch.tensor(observation, dtype=torch.float32, device=self.device).div_(255)
-        return observation
 
 
 class StarPilotEnv(Env):

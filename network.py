@@ -1,96 +1,11 @@
 # adapted from https://github.com/Kaixhin/Rainbow and https://github.com/facebookresearch/pytorch_GAN_zoo
 
-import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from pytorch_GAN_zoo.models.networks.custom_layers import EqualizedConv2d, EqualizedLinear, NormalizationLayer, \
-    Upscale2d, ConstrainedLayer
-from pytorch_GAN_zoo.models.utils.utils import num_flat_features
-from pytorch_GAN_zoo.models.networks.mini_batch_stddev_module import miniBatchStdDev
-
-
-class EqualizedConv3d(ConstrainedLayer):
-    def __init__(self, in_channels, out_channels, kernel_size, padding, bias=True, **kwargs):
-        ConstrainedLayer.__init__(self, nn.Conv3d(in_channels, out_channels, kernel_size, padding=padding, bias=bias),
-                                  **kwargs)
-
-
-class SqueezeLayer(nn.Module):
-    def __init__(self, dim):
-        super(SqueezeLayer, self).__init__()
-        self.dim = dim
-
-    def forward(self, x):
-        return x.squeeze(self.dim)
-
-
-class NoisyLinear(nn.Module):
-    def __init__(self, in_features, out_features, std_init):
-        super(NoisyLinear, self).__init__()
-        self.in_features = in_features
-        self.out_features = out_features
-        self.std_init = std_init
-        self.weight_mu = nn.Parameter(torch.empty(out_features, in_features))
-        self.weight_sigma = nn.Parameter(torch.empty(out_features, in_features))
-        self.register_buffer('weight_epsilon', torch.empty(out_features, in_features))
-        self.bias_mu = nn.Parameter(torch.empty(out_features))
-        self.bias_sigma = nn.Parameter(torch.empty(out_features))
-        self.register_buffer('bias_epsilon', torch.empty(out_features))
-        self.reset_parameters()
-        self.reset_noise()
-
-    def reset_parameters(self):
-        mu_range = 1 / math.sqrt(self.in_features)
-        self.weight_mu.data.uniform_(-mu_range, mu_range)
-        self.weight_sigma.data.fill_(self.std_init / math.sqrt(self.in_features))
-        self.bias_mu.data.uniform_(-mu_range, mu_range)
-        self.bias_sigma.data.fill_(self.std_init / math.sqrt(self.out_features))
-
-    @staticmethod
-    def _scale_noise(size):
-        x = torch.randn(size)
-        return x.sign().mul_(x.abs().sqrt_())
-
-    def reset_noise(self):
-        epsilon_in = self._scale_noise(self.in_features)
-        epsilon_out = self._scale_noise(self.out_features)
-        self.weight_epsilon.copy_(epsilon_out.ger(epsilon_in))
-        self.bias_epsilon.copy_(epsilon_out)
-
-    def forward(self, x):
-        if self.training:
-            return F.linear(x, self.weight_mu + self.weight_sigma * self.weight_epsilon,
-                            self.bias_mu + self.bias_sigma * self.bias_epsilon)
-        else:
-            return F.linear(x, self.weight_mu, self.bias_mu)
-
-
-class BasicBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, stride):
-        super(BasicBlock, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(out_channels)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(out_channels)
-        self.downsample = None if stride == 1 else nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride,
-                                                             bias=False)
-        self.downsample_bn = nn.BatchNorm2d(out_channels)
-
-    def forward(self, x):
-        identity = x
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-        out = self.conv2(out)
-        out = self.bn2(out)
-        if self.downsample is not None:
-            identity = self.downsample(x)
-            identity = self.downsample_bn(identity)
-        out += identity
-        out = self.relu(out)
-        return out
+from layers import flatten, upscale2d, EqualizedLinear, EqualizedConv2d, EqualizedConv3d, NormalizationLayer, \
+    SqueezeLayer, NoisyLinear, BasicBlock
+from network_utils import mini_batch_std_dev
 
 
 class DQN(nn.Module):
@@ -163,15 +78,15 @@ class GeneratorDQN(DQN):
 
         self.to_rgb_layers = nn.ModuleList()
         self.to_rgb_layers.append(EqualizedConv2d(self.depth_scale0, self.dim_output, 1, equalized=self.equalized_lr,
-                                                  initBiasToZero=self.init_bias_to_zero))
+                                                  init_bias_to_zero=self.init_bias_to_zero))
 
         self.format_layer = EqualizedLinear(self.dim_latent, 16 * self.scales_depth[0], equalized=self.equalized_lr,
-                                            initBiasToZero=self.init_bias_to_zero)
+                                            init_bias_to_zero=self.init_bias_to_zero)
 
         self.group_scale0 = nn.ModuleList()
         self.group_scale0.append(
             EqualizedConv2d(self.depth_scale0, self.depth_scale0, 3, padding=1, equalized=self.equalized_lr,
-                            initBiasToZero=self.init_bias_to_zero))
+                            init_bias_to_zero=self.init_bias_to_zero))
 
         self.alpha = 0
 
@@ -188,13 +103,13 @@ class GeneratorDQN(DQN):
         self.scale_layers.append(nn.ModuleList())
         self.scale_layers[-1].append(
             EqualizedConv2d(depth_last_scale, depth_new_scale, 3, padding=1, equalized=self.equalized_lr,
-                            initBiasToZero=self.init_bias_to_zero))
+                            init_bias_to_zero=self.init_bias_to_zero))
         self.scale_layers[-1].append(
             EqualizedConv2d(depth_new_scale, depth_new_scale, 3, padding=1, equalized=self.equalized_lr,
-                            initBiasToZero=self.init_bias_to_zero))
+                            init_bias_to_zero=self.init_bias_to_zero))
 
         self.to_rgb_layers.append(EqualizedConv2d(depth_new_scale, self.dim_output, 1, equalized=self.equalized_lr,
-                                                  initBiasToZero=self.init_bias_to_zero))
+                                                  init_bias_to_zero=self.init_bias_to_zero))
 
     def set_alpha(self, alpha):
         self.alpha = alpha
@@ -213,7 +128,7 @@ class GeneratorDQN(DQN):
             return q, x
 
         x = self.normalization_layer(x)
-        x = x.view(-1, num_flat_features(x))
+        x = flatten(x)
         x = torch.cat((x, actions), dim=1)
         x = self.leaky_relu(self.format_layer(x))
         x = x.view(x.size()[0], -1, 4, 4)
@@ -225,16 +140,16 @@ class GeneratorDQN(DQN):
 
         if self.alpha > 0 and len(self.scale_layers) == 1:
             y = self.to_rgb_layers[-2](x)
-            y = Upscale2d(y)
+            y = upscale2d(y)
 
         for scale, layer_group in enumerate(self.scale_layers, 0):
-            x = Upscale2d(x)
+            x = upscale2d(x)
             for conv_layer in layer_group:
                 x = self.leaky_relu(conv_layer(x))
                 x = self.normalization_layer(x)
             if self.alpha > 0 and scale == (len(self.scale_layers) - 2):
                 y = self.to_rgb_layers[-2](x)
-                y = Upscale2d(y)
+                y = upscale2d(y)
 
         x = self.to_rgb_layers[-1](x)
 
@@ -265,20 +180,20 @@ class PGANDiscriminator(nn.Module):
         self.from_rgb_layers = nn.ModuleList()
         self.from_rgb_layers.append(
             EqualizedConv3d(self.dim_input, self.depth_scale0, kernel_size=3, padding=[0, 1, 1],
-                            equalized=self.equalized_lr, initBiasToZero=self.init_bias_to_zero))
+                            equalized=self.equalized_lr, init_bias_to_zero=self.init_bias_to_zero))
 
         self.merge_layers = nn.ModuleList()
 
         self.decision_layer = EqualizedLinear(self.scales_depth[0], self.size_decision_layer,
-                                              equalized=self.equalized_lr, initBiasToZero=self.init_bias_to_zero)
+                                              equalized=self.equalized_lr, init_bias_to_zero=self.init_bias_to_zero)
 
         self.group_scale0 = nn.ModuleList()
         self.group_scale0.append(
             EqualizedConv2d(self.dim_entry_scale0, self.depth_scale0, 3, padding=1, equalized=self.equalized_lr,
-                            initBiasToZero=self.init_bias_to_zero))
+                            init_bias_to_zero=self.init_bias_to_zero))
         self.group_scale0.append(
             EqualizedLinear(self.depth_scale0 * 16 + self.action_size, self.depth_scale0, equalized=self.equalized_lr,
-                            initBiasToZero=self.init_bias_to_zero))
+                            init_bias_to_zero=self.init_bias_to_zero))
 
         self.alpha = 0
 
@@ -292,14 +207,14 @@ class PGANDiscriminator(nn.Module):
         self.scale_layers.append(nn.ModuleList())
         self.scale_layers[-1].append(
             EqualizedConv2d(depth_new_scale, depth_new_scale, 3, padding=1, equalized=self.equalized_lr,
-                            initBiasToZero=self.init_bias_to_zero))
+                            init_bias_to_zero=self.init_bias_to_zero))
         self.scale_layers[-1].append(
             EqualizedConv2d(depth_new_scale, depth_last_scale, 3, padding=1, equalized=self.equalized_lr,
-                            initBiasToZero=self.init_bias_to_zero))
+                            init_bias_to_zero=self.init_bias_to_zero))
 
         self.from_rgb_layers.append(
             EqualizedConv3d(self.dim_input, depth_new_scale, kernel_size=3, padding=[0, 1, 1],
-                            equalized=self.equalized_lr, initBiasToZero=self.init_bias_to_zero))
+                            equalized=self.equalized_lr, init_bias_to_zero=self.init_bias_to_zero))
 
     def set_alpha(self, alpha):
         self.alpha = alpha
@@ -330,11 +245,11 @@ class PGANDiscriminator(nn.Module):
             shift -= 1
 
         if self.mini_batch_normalization:
-            x = miniBatchStdDev(x)
+            x = mini_batch_std_dev(x)
 
         x = self.leaky_relu(self.group_scale0[0](x))
 
-        x = x.view(-1, num_flat_features(x))
+        x = flatten(x)
         x = torch.cat((x, actions), dim=1)
 
         x = self.leaky_relu(self.group_scale0[1](x))
