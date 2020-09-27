@@ -8,14 +8,14 @@ import numpy as np
 torch.manual_seed(828)
 np.random.seed(828)
 
-env = StarPilotEnv(action_size=15, history_length=4,
+env = StarPilotEnv(action_size=15, history_length=16,
                    num_levels=10, start_level=0, distribution_mode="easy",
                    use_backgrounds=False)
-train_env = StarPilotEnv(action_size=15, history_length=4,
+train_env = StarPilotEnv(action_size=15, history_length=env.window,
                          num_levels=env.num_levels, start_level=env.start_level,
                          distribution_mode=env.distribution_mode,
                          use_backgrounds=env.use_backgrounds)
-test_env = StarPilotEnv(action_size=15, history_length=4,
+test_env = StarPilotEnv(action_size=15, history_length=env.window,
                         num_levels=20, start_level=int(100e3),
                         distribution_mode=env.distribution_mode,
                         use_backgrounds=env.use_backgrounds)
