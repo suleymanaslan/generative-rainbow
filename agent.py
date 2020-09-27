@@ -174,8 +174,6 @@ class Agent:
 
     def learn_joint(self, mem, trainer):
         idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)
-        if self.scale > 0:
-            self.model_alpha = 1.0
 
         self.steps += 1
         actions_one_hot = torch.eye(self.action_size)[actions].to(self.device)
@@ -301,6 +299,7 @@ class Agent:
                 self.optimizer_d.zero_grad()
                 self.optimizer_o.zero_grad()
                 self.scale += 1
+                self.model_alpha = 1.0
 
     def learn_gan(self, mem, trainer, steps=5000):
         if self.scale > 0:
