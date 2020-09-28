@@ -65,12 +65,13 @@ class DQN(nn.Module):
 
 
 class GeneratorDQN(DQN):
-    def __init__(self, atoms, action_size, history_length, hidden_size, noisy_std, residual_network=False):
+    def __init__(self, atoms, action_size, history_length, hidden_size, noisy_std, dim_output=1,
+                 residual_network=False):
         super(GeneratorDQN, self).__init__(atoms, action_size, history_length, hidden_size, noisy_std, residual_network)
         self.depth_scale0 = 128
         self.equalized_lr = True
         self.init_bias_to_zero = True
-        self.dim_output = 1
+        self.dim_output = dim_output
         self.dim_latent = self.feat_size + self.action_size
         self.scales_depth = [self.depth_scale0]
 
@@ -163,13 +164,13 @@ class GeneratorDQN(DQN):
 
 
 class PGANDiscriminator(nn.Module):
-    def __init__(self, action_size):
+    def __init__(self, action_size, dim_input=1):
         super(PGANDiscriminator, self).__init__()
         self.action_size = action_size
         self.depth_scale0 = 128
         self.equalized_lr = True
         self.init_bias_to_zero = True
-        self.dim_input = 1
+        self.dim_input = dim_input
         self.size_decision_layer = 1
         self.mini_batch_normalization = True
         self.dim_entry_scale0 = self.depth_scale0 + 1

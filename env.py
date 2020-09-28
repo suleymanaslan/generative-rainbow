@@ -11,11 +11,13 @@ from PIL import Image
 
 
 class Env:
-    def __init__(self, action_size, history_length):
+    def __init__(self, action_size, history_length, view_mode="gray"):
         self.device = torch.device("cuda:0")
         self.wrapped_env = self._get_env()
         self.action_space = [i for i in range(action_size)]
         self.window = history_length
+        self.view_mode = view_mode
+        assert self.view_mode in ["gray", "rgb"]
         self.state_buffer = deque([], maxlen=self.window)
 
     def _get_env(self):
@@ -102,32 +104,40 @@ class Env:
 
 
 class StarPilotEnv(Env):
-    def __init__(self, action_size, history_length, num_levels, start_level, distribution_mode, use_backgrounds):
+    def __init__(self, action_size, history_length, num_levels, start_level, distribution_mode, use_backgrounds,
+                 view_mode="gray"):
         self.num_levels = num_levels
         self.start_level = start_level
         self.distribution_mode = distribution_mode
         self.use_backgrounds = use_backgrounds
-        super(StarPilotEnv, self).__init__(action_size, history_length)
+        super(StarPilotEnv, self).__init__(action_size, history_length, view_mode)
 
     def _get_env(self):
         return gym.make("procgen:procgen-starpilot-v0", num_levels=self.num_levels, start_level=self.start_level,
                         distribution_mode=self.distribution_mode, use_backgrounds=self.use_backgrounds)
 
     def _reset_buffer(self):
+        blank_obs = torch.zeros(3, 64, 64, device=self.device) if self.view_mode == "rgb" else \
+            torch.zeros(64, 64, device=self.device)
         for _ in range(self.window):
-            self.state_buffer.append(torch.zeros(64, 64, device=self.device))
+            self.state_buffer.append(blank_obs)
 
     def _process_observation(self, observation):
-        observation = cv2.cvtColor(observation, cv2.COLOR_RGB2GRAY)
+        if self.view_mode == "gray":
+            observation = cv2.cvtColor(observation, cv2.COLOR_RGB2GRAY)
         observation = torch.tensor(observation, dtype=torch.float32, device=self.device).div_(255)
+        if self.view_mode == "rgb":
+            observation = observation.permute(2, 0, 1)
         return observation
 
     def render(self):
-        render_img = cv2.resize((self.state_buffer[-1].cpu().numpy() * 255).astype(np.uint8), (0, 0), fx=4.0, fy=4.0)
+        render_img = self.state_buffer[-1].permute(1, 2, 0) if self.view_mode == "rgb" else self.state_buffer[-1]
+        render_img = cv2.resize((render_img.cpu().numpy() * 255).astype(np.uint8), (0, 0), fx=4.0, fy=4.0)
         display.clear_output(wait=True)
         display.display(Image.fromarray(render_img))
         time.sleep(1 / 60)
 
     def step(self, action):
-        frame_buffer = torch.zeros(2, 64, 64, device=self.device)
+        frame_buffer = torch.zeros(2, 3, 64, 64, device=self.device) if self.view_mode == "rgb" else \
+            torch.zeros(2, 64, 64, device=self.device)
         return self._step(action, frame_buffer)

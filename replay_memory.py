@@ -6,6 +6,7 @@ from collections import namedtuple
 
 Transition = namedtuple('Transition', ('timestep', 'state', 'action', 'reward', 'nonterminal'))
 blank_trans = Transition(0, torch.zeros(64, 64, dtype=torch.uint8), None, 0, False)
+blank_rgb_trans = Transition(0, torch.zeros(3, 64, 64, dtype=torch.uint8), None, 0, False)
 
 
 class SegmentTree:
@@ -58,10 +59,11 @@ class SegmentTree:
 
 
 class ReplayMemory:
-    def __init__(self, capacity, history_length, discount, multi_step, priority_weight, priority_exponent):
+    def __init__(self, capacity, env, discount, multi_step, priority_weight, priority_exponent):
         self.device = torch.device("cuda:0")
         self.capacity = capacity
-        self.history = history_length
+        self.history = env.window
+        self.view_mode = env.view_mode
         self.discount = discount
         self.n = multi_step
         self.priority_weight = priority_weight
@@ -93,7 +95,10 @@ class ReplayMemory:
         return transition
 
     def _get_transition(self, idx):
-        return self._return_transition(idx, blank_trans)
+        if self.view_mode == "rgb":
+            return self._return_transition(idx, blank_rgb_trans)
+        else:
+            return self._return_transition(idx, blank_trans)
 
     def _return_sample_from_segment(self, segment, i):
         valid = False

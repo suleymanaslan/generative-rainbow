@@ -19,6 +19,7 @@ class Agent:
                  discount, norm_clip, lr, adam_eps, hidden_size, noisy_std, load_file=None):
         self.device = torch.device("cuda:0")
         self.env = env
+        self.in_channels = self.env.window * 3 if self.env.view_mode == "rgb" else self.env.window
         self.action_size = len(self.env.action_space)
         self.hidden_size = hidden_size
         self.atoms = atoms
@@ -75,11 +76,12 @@ class Agent:
             self.load(f"trained_models/{load_file}")
 
     def _get_nets(self):
-        online_net = GeneratorDQN(self.atoms, self.action_size, self.env.window, self.hidden_size,
-                                  self.noisy_std, residual_network=False).to(self.device)
-        target_net = DQN(self.atoms, self.action_size, self.env.window, self.hidden_size,
+        img_dim = 3 if self.env.view_mode == "rgb" else 1
+        online_net = GeneratorDQN(self.atoms, self.action_size, self.in_channels, self.hidden_size,
+                                  self.noisy_std, dim_output=img_dim, residual_network=False).to(self.device)
+        target_net = DQN(self.atoms, self.action_size, self.in_channels, self.hidden_size,
                          self.noisy_std, residual_network=False).to(self.device)
-        discrm_net = PGANDiscriminator(self.action_size)
+        discrm_net = PGANDiscriminator(self.action_size, dim_input=img_dim)
         return online_net, target_net, discrm_net
 
     def train(self):
@@ -99,9 +101,14 @@ class Agent:
     def save_generated(self, save_dir):
         if self.real_state is None:
             return
-        real_state = (self.real_state.numpy() * 255).astype(np.uint8)
-        real_next_state = (self.real_next_state.numpy() * 255).astype(np.uint8)
-        generated_state = self.generated_state.numpy()
+        if self.env.view_mode == "rgb":
+            real_state = (self.real_state.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
+            real_next_state = (self.real_next_state.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
+            generated_state = self.generated_state.permute(1, 2, 0).numpy()
+        else:
+            real_state = (self.real_state.numpy() * 255).astype(np.uint8)
+            real_next_state = (self.real_next_state.numpy() * 255).astype(np.uint8)
+            generated_state = self.generated_state.numpy()
         generated_state = ((generated_state - generated_state.min()) / (
                 generated_state.max() - generated_state.min()) * 255).astype(np.uint8)
         pgan_img = np.concatenate((real_state, real_next_state, generated_state), axis=1)
@@ -123,6 +130,8 @@ class Agent:
             return (q * self.support).sum(2).argmax(1).item(), x
 
     def act(self, state):
+        if self.env.view_mode == "rgb":
+            state = state.view(-1, 64, 64)
         return self._act(state)
 
     def act_e_greedy(self, state, epsilon=0.001):
@@ -169,11 +178,16 @@ class Agent:
         mem.update_priorities(idxs, loss.detach().cpu().numpy())
 
     def learn(self, mem):
+        raise NotImplementedError
         idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)
         self._learn(mem, idxs, states, actions, returns, next_states, nonterminals, weights)
 
     def learn_joint(self, mem, trainer):
         idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)
+
+        if self.env.view_mode == "rgb":
+            states = states.view(self.batch_size, -1, 64, 64)
+            next_states = next_states.view(self.batch_size, -1, 64, 64)
 
         self.steps += 1
         actions_one_hot = torch.eye(self.action_size)[actions].to(self.device)
@@ -181,15 +195,20 @@ class Agent:
         if (self.steps % (self.steps_per_scale // 1000) == 0) and self.model_alpha > 0:
             self.model_alpha = max(0.0, self.model_alpha - self.alpha_update_cons)
 
+        gan_frames = 2
+        gan_channels = gan_frames * 3 if self.env.view_mode == "rgb" else gan_frames
+        gan_next_frames = 1
+        gan_next_channels = gan_next_frames * 3 if self.env.view_mode == "rgb" else gan_next_frames
+
         if self.scale < self.max_scale:
-            pgan_states = F.avg_pool2d(states[:, self.env.window - 2:self.env.window, :, :], 2)
-            pgan_next_states = F.avg_pool2d(next_states[:, self.env.window - 1:self.env.window, :, :], 2)
+            pgan_states = F.avg_pool2d(states[:, -gan_channels:, :, :], 2)
+            pgan_next_states = F.avg_pool2d(next_states[:, -gan_next_channels:, :, :], 2)
             for _ in range(1, self.max_scale - self.scale):
                 pgan_states = F.avg_pool2d(pgan_states, (2, 2))
                 pgan_next_states = F.avg_pool2d(pgan_next_states, (2, 2))
         else:
-            pgan_states = states[:, self.env.window - 2:self.env.window, :, :]
-            pgan_next_states = next_states[:, self.env.window - 1:self.env.window, :, :]
+            pgan_states = states[:, -gan_channels:, :, :]
+            pgan_next_states = next_states[:, -gan_next_channels:, :, :]
 
         if self.model_alpha > 0:
             low_res_real = F.avg_pool2d(pgan_states, (2, 2))
@@ -199,20 +218,32 @@ class Agent:
             low_res_real = F.interpolate(low_res_real, scale_factor=2, mode='nearest')
             pgan_next_states = self.model_alpha * low_res_real + (1 - self.model_alpha) * pgan_next_states
 
-        pgan_states = pgan_states.unsqueeze(1)
+        if self.env.view_mode == "rgb":
+            img_size = 2 ** (self.scale + 2)
+            pgan_states = pgan_states.view(self.batch_size, 3, -1, img_size, img_size)
+            pgan_next_states = pgan_next_states.view(self.batch_size, 3, -1, img_size, img_size)
+        else:
+            pgan_states = pgan_states.unsqueeze(1)
+            pgan_next_states = pgan_next_states.unsqueeze(1)
 
         self.discrm_net.set_alpha(self.model_alpha)
         self.online_net.set_alpha(self.model_alpha)
 
         self.optimizer_d.zero_grad()
 
-        real_input = torch.cat((pgan_states, pgan_next_states.unsqueeze(1)), dim=2)
+        real_input = torch.cat((pgan_states, pgan_next_states), dim=2)
         pred_real_d = self.discrm_net(real_input, actions_one_hot, False)
         loss_d = self.loss_criterion.get_criterion(pred_real_d, True)
         all_loss_d = loss_d
 
         log_ps, pred_fake_g = self.online_net(states, actions=actions_one_hot, use_log_softmax=True)
-        pred_fake_g = pred_fake_g.unsqueeze(1)
+
+        if self.env.view_mode == "rgb":
+            img_size = 2 ** (self.scale + 2)
+            pred_fake_g = pred_fake_g.view(self.batch_size, 3, -1, img_size, img_size)
+        else:
+            pred_fake_g = pred_fake_g.unsqueeze(1)
+
         fake_input = torch.cat((pgan_states, pred_fake_g.detach()), dim=2)
         pred_fake_d = self.discrm_net(fake_input, actions_one_hot, False)
         loss_d_fake = self.loss_criterion.get_criterion(pred_fake_d, False)
@@ -277,9 +308,14 @@ class Agent:
                                   f"L_DR:{loss_d.item():.2f}, L_DF:{loss_d_fake.item():.2f}, "
                                   f"L_DG:{loss_d_grad:.2f}, L_DE:{loss_epsilon.item():.2f}")
 
-            self.real_state = pgan_states[0][0][-1].detach().cpu()
-            self.real_next_state = pgan_next_states[0][-1].detach().cpu()
-            self.generated_state = pred_fake_g[0][0][0].detach().cpu()
+            if self.env.view_mode == "rgb":
+                self.real_state = pgan_states[0, :, -1].detach().cpu()
+                self.real_next_state = pgan_next_states[0, :, -1].detach().cpu()
+                self.generated_state = pred_fake_g[0, :, 0].detach().cpu()
+            else:
+                self.real_state = pgan_states[0][0][-1].detach().cpu()
+                self.real_next_state = pgan_next_states[0][0][-1].detach().cpu()
+                self.generated_state = pred_fake_g[0][0][0].detach().cpu()
             self.save_generated(trainer.model_dir)
 
         if self.steps >= self.steps_per_scale:
@@ -302,6 +338,7 @@ class Agent:
                 self.model_alpha = 1.0
 
     def learn_gan(self, mem, trainer, steps=5000):
+        raise NotImplementedError
         if self.scale > 0:
             self.model_alpha = 1.0
 
