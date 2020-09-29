@@ -249,8 +249,10 @@ class Agent:
 
         if self.env.view_mode == "rgb":
             img_size = 2 ** (self.scale + 2)
-            pgan_states = pgan_states.view(self.batch_size, 3, -1, img_size, img_size)
-            pgan_next_states = pgan_next_states.view(self.batch_size, 3, -1, img_size, img_size)
+            pgan_states = pgan_states.view(self.batch_size, gan_frames, 3, img_size, img_size)
+            pgan_states = pgan_states.permute(0, 2, 1, 3, 4)
+            pgan_next_states = pgan_next_states.view(self.batch_size, gan_next_frames, 3, img_size, img_size)
+            pgan_next_states = pgan_next_states.permute(0, 2, 1, 3, 4)
         else:
             pgan_states = pgan_states.unsqueeze(1)
             pgan_next_states = pgan_next_states.unsqueeze(1)
@@ -269,7 +271,8 @@ class Agent:
 
         if self.env.view_mode == "rgb":
             img_size = 2 ** (self.scale + 2)
-            pred_fake_g = pred_fake_g.view(self.batch_size, 3, -1, img_size, img_size)
+            pred_fake_g = pred_fake_g.view(self.batch_size, gan_next_frames, 3, img_size, img_size)
+            pred_fake_g = pred_fake_g.permute(0, 2, 1, 3, 4)
         else:
             pred_fake_g = pred_fake_g.unsqueeze(1)
 
