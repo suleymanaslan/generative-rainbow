@@ -132,12 +132,13 @@ class StarPilotEnv(Env):
 
     def render(self):
         render_img = self.state_buffer[-1].permute(1, 2, 0) if self.view_mode == "rgb" else self.state_buffer[-1]
-        render_img = cv2.resize((render_img.cpu().numpy() * 255).astype(np.uint8), (0, 0), fx=4.0, fy=4.0)
+        render_img = cv2.resize((render_img.cpu().numpy() * 255).astype(np.uint8), (0, 0), fx=4.0, fy=4.0,
+                                interpolation=cv2.INTER_NEAREST)
         display.clear_output(wait=True)
         display.display(Image.fromarray(render_img))
         time.sleep(1 / 60)
 
     def step(self, action):
-        frame_buffer = torch.zeros(2, 3, 64, 64, device=self.device) if self.view_mode == "rgb" else \
-            torch.zeros(2, 64, 64, device=self.device)
-        return self._step(action, frame_buffer)
+        observation, reward, done, info = self.wrapped_env.step(action)
+        self.state_buffer.append(self._process_observation(observation))
+        return torch.stack(list(self.state_buffer), 0), reward, done, info

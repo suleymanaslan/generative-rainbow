@@ -16,7 +16,7 @@ class Trainer:
         self.learning_start_step = learning_start_step
         self.target_update = target_update
         self.training_mode = training_mode
-        assert self.training_mode in ["joint", "separate", "frozen"]
+        assert self.training_mode in ["joint", "separate", "frozen", "dqn_only"]
         self.gan_steps = gan_steps
         self.eval_steps = eval_steps
         self.plot_steps = plot_steps
@@ -76,6 +76,9 @@ class Trainer:
                             agent.learn_gan(mem, self)
                         if steps % self.replay_frequency == 0:
                             agent.learn(mem)
+                    elif self.training_mode == "dqn_only":
+                        if steps % self.replay_frequency == 0:
+                            agent.learn(mem)
                     else:
                         raise NotImplementedError
                     if steps % self.target_update == 0:
@@ -85,8 +88,7 @@ class Trainer:
             self.ep_rewards.append(ep_reward)
             self.ep_steps.append(steps)
             if episode == 1 or episode % 100 == 0:
-                self.print_and_log(f"{datetime.now()}, episode:{episode:5d}, step:{steps:6d}, "
-                                   f"reward:{ep_reward:4.1f}"),
+                self.print_and_log(f"{datetime.now()}, episode:{episode:5d}, step:{steps:6d}, reward:{ep_reward:4.1f}")
         self.print_and_log(f"{datetime.now()}, end training")
 
     def plot(self, max_reward=60):

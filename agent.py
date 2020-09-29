@@ -141,8 +141,7 @@ class Agent:
         else:
             return action, features
 
-    def _learn(self, mem, idxs, states, actions, returns, next_states, nonterminals, weights):
-        log_ps, _ = self.online_net(states, skip_gan=True, use_log_softmax=True)
+    def _dqn_loss(self, log_ps, states, actions, returns, next_states, nonterminals):
         log_ps_a = log_ps[range(self.batch_size), actions]
 
         with torch.no_grad():
@@ -168,6 +167,21 @@ class Agent:
 
         loss = -torch.sum(m * log_ps_a, 1)
 
+        return loss
+
+    def _get_sample(self, mem):
+        idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)
+
+        if self.env.view_mode == "rgb":
+            states = states.view(self.batch_size, -1, 64, 64)
+            next_states = next_states.view(self.batch_size, -1, 64, 64)
+
+        return idxs, states, actions, returns, next_states, nonterminals, weights
+
+    def _learn(self, mem, idxs, states, actions, returns, next_states, nonterminals, weights):
+        log_ps, _ = self.online_net(states, skip_gan=True, use_log_softmax=True)
+        loss = self._dqn_loss(log_ps, states, actions, returns, next_states, nonterminals)
+
         self.optimizer_o.zero_grad()
 
         (weights * loss).mean().backward()
@@ -178,16 +192,11 @@ class Agent:
         mem.update_priorities(idxs, loss.detach().cpu().numpy())
 
     def learn(self, mem):
-        raise NotImplementedError
-        idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)
+        idxs, states, actions, returns, next_states, nonterminals, weights = self._get_sample(mem)
         self._learn(mem, idxs, states, actions, returns, next_states, nonterminals, weights)
 
     def learn_joint(self, mem, trainer):
-        idxs, states, actions, returns, next_states, nonterminals, weights = mem.sample(self.batch_size)
-
-        if self.env.view_mode == "rgb":
-            states = states.view(self.batch_size, -1, 64, 64)
-            next_states = next_states.view(self.batch_size, -1, 64, 64)
+        idxs, states, actions, returns, next_states, nonterminals, weights = self._get_sample(mem)
 
         self.steps += 1
         actions_one_hot = torch.eye(self.action_size)[actions].to(self.device)
@@ -267,30 +276,7 @@ class Agent:
         loss_g_fake = self.loss_criterion.get_criterion(pred_fake_d, True)
         all_loss_o = loss_g_fake * self.gan_alpha
 
-        log_ps_a = log_ps[range(self.batch_size), actions]
-
-        with torch.no_grad():
-            pns, _ = self.online_net(next_states, skip_gan=True)
-            dns = self.support.expand_as(pns) * pns
-            argmax_indices_ns = dns.sum(2).argmax(1)
-            self.target_net.reset_noise()
-            pns, _ = self.target_net(next_states)
-            pns_a = pns[range(self.batch_size), argmax_indices_ns]
-
-            tz = returns.unsqueeze(1) + nonterminals * (self.discount ** self.n) * self.support.unsqueeze(0)
-            tz = tz.clamp(min=self.v_min, max=self.v_max)
-            b = (tz - self.v_min) / self.delta_z
-            l, u = b.floor().to(torch.int64), b.ceil().to(torch.int64)
-            l[(u > 0) * (l == u)] -= 1
-            u[(l < (self.atoms - 1)) * (l == u)] += 1
-
-            m = states.new_zeros(self.batch_size, self.atoms)
-            offset = torch.linspace(0, ((self.batch_size - 1) * self.atoms), self.batch_size) \
-                .unsqueeze(1).expand(self.batch_size, self.atoms).to(actions)
-            m.view(-1).index_add_(0, (l + offset).view(-1), (pns_a * (u.float() - b)).view(-1))
-            m.view(-1).index_add_(0, (u + offset).view(-1), (pns_a * (b - l.float())).view(-1))
-
-        loss = -torch.sum(m * log_ps_a, 1)
+        loss = self._dqn_loss(log_ps, states, actions, returns, next_states, nonterminals)
 
         all_loss_o += (weights * loss).mean() * (1 - self.gan_alpha)
         all_loss_o.backward(retain_graph=True)
