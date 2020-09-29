@@ -16,7 +16,7 @@ class Trainer:
         self.learning_start_step = learning_start_step
         self.target_update = target_update
         self.training_mode = training_mode
-        assert self.training_mode in ["joint", "separate", "frozen", "dqn_only"]
+        assert self.training_mode in ["joint", "separate", "frozen", "dqn_only", "gan_only"]
         self.gan_steps = gan_steps
         self.eval_steps = eval_steps
         self.plot_steps = plot_steps
@@ -79,6 +79,8 @@ class Trainer:
                     elif self.training_mode == "dqn_only":
                         if steps % self.replay_frequency == 0:
                             agent.learn(mem)
+                    elif self.training_mode == "gan_only":
+                        agent.learn_gan(mem, self, repeat=1)
                     else:
                         raise NotImplementedError
                     if steps % self.target_update == 0:
