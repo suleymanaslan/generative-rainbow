@@ -26,6 +26,10 @@ def upscale2d(x, factor=2):
     return x
 
 
+def mixed_pool2d(x, kernel_size=2, max_alpha=0.5):
+    return F.max_pool2d(x, kernel_size) * max_alpha + F.avg_pool2d(x, kernel_size) * (1 - max_alpha)
+
+
 class ConstrainedLayer(nn.Module):
     def __init__(self, module, equalized=True, lr_mul=1.0, init_bias_to_zero=True):
         super(ConstrainedLayer, self).__init__()

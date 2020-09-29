@@ -9,6 +9,7 @@ import numpy as np
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
+from layers import mixed_pool2d
 
 from network import DQN, GeneratorDQN, PGANDiscriminator
 from network_utils import WGANGP, finite_check, wgangp_gradient_penalty
@@ -230,20 +231,20 @@ class Agent:
         gan_next_channels = gan_next_frames * 3 if self.env.view_mode == "rgb" else gan_next_frames
 
         if self.scale < self.max_scale:
-            pgan_states = F.avg_pool2d(states[:, -gan_channels:, :, :], 2)
-            pgan_next_states = F.avg_pool2d(next_states[:, -gan_next_channels:, :, :], 2)
+            pgan_states = mixed_pool2d(states[:, -gan_channels:, :, :])
+            pgan_next_states = mixed_pool2d(next_states[:, -gan_next_channels:, :, :])
             for _ in range(1, self.max_scale - self.scale):
-                pgan_states = F.avg_pool2d(pgan_states, (2, 2))
-                pgan_next_states = F.avg_pool2d(pgan_next_states, (2, 2))
+                pgan_states = mixed_pool2d(pgan_states)
+                pgan_next_states = mixed_pool2d(pgan_next_states)
         else:
             pgan_states = states[:, -gan_channels:, :, :]
             pgan_next_states = next_states[:, -gan_next_channels:, :, :]
 
         if self.model_alpha > 0:
-            low_res_real = F.avg_pool2d(pgan_states, (2, 2))
+            low_res_real = mixed_pool2d(pgan_states)
             low_res_real = F.interpolate(low_res_real, scale_factor=2, mode='nearest')
             pgan_states = self.model_alpha * low_res_real + (1 - self.model_alpha) * pgan_states
-            low_res_real = F.avg_pool2d(pgan_next_states, (2, 2))
+            low_res_real = mixed_pool2d(pgan_next_states)
             low_res_real = F.interpolate(low_res_real, scale_factor=2, mode='nearest')
             pgan_next_states = self.model_alpha * low_res_real + (1 - self.model_alpha) * pgan_next_states
 
