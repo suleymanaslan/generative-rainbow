@@ -93,10 +93,12 @@ class Agent:
     def save(self, save_dir):
         torch.save(self.online_net.state_dict(), f"{save_dir}/online_net.pth")
         torch.save(self.target_net.state_dict(), f"{save_dir}/target_net.pth")
+        torch.save(self.discrm_net.state_dict(), f"{save_dir}/discrm_net.pth")
 
     def load(self, load_dir):
         self.online_net.load_state_dict(torch.load(f"{load_dir}/online_net.pth"))
         self.target_net.load_state_dict(torch.load(f"{load_dir}/target_net.pth"))
+        self.discrm_net.load_state_dict(torch.load(f"{load_dir}/discrm_net.pth"))
 
     def save_generated(self, save_dir):
         if self.real_state is None:
