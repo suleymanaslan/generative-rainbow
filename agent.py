@@ -218,7 +218,10 @@ class Agent:
 
         self._gan_check(trainer, pgan_states, pgan_next_states, pred_fake_g, loss_dict)
 
-    def _gan_loss(self, states, actions, next_states):
+    def _gan_loss(self, states, actions, next_states, gan_alpha=None):
+        if gan_alpha is None:
+            gan_alpha = self.gan_alpha
+
         self.gan_steps += 1
         actions_one_hot = torch.eye(self.action_size)[actions].to(self.device)
 
@@ -283,12 +286,13 @@ class Agent:
         all_loss_d += loss_d_fake
 
         loss_d_grad = wgangp_gradient_penalty(real_input, fake_input, actions_one_hot, self.discrm_net, weight=10.0,
-                                              backward=True)
+                                              backward=False)
+        (loss_d_grad * gan_alpha).backward(retain_graph=True)
 
         loss_epsilon = (pred_real_d[:, 0] ** 2).sum() * self.epsilon_d
         all_loss_d += loss_epsilon
 
-        all_loss_d.backward(retain_graph=True)
+        (all_loss_d * gan_alpha).backward(retain_graph=True)
         finite_check(self.discrm_net.parameters())
         self.optimizer_d.step()
 
@@ -350,7 +354,8 @@ class Agent:
         for ix in range(1, repeat + 1):
             idxs, states, actions, returns, next_states, nonterminals, weights = self._get_sample(mem)
 
-            log_ps, pgan_states, pgan_next_states, pred_fake_g, loss_dict = self._gan_loss(states, actions, next_states)
+            log_ps, pgan_states, pgan_next_states, pred_fake_g, loss_dict = self._gan_loss(states, actions, next_states,
+                                                                                           gan_alpha=1)
 
             loss_dict["g_fake"].backward(retain_graph=True)
             finite_check(self.online_net.parameters())

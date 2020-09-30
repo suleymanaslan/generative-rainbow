@@ -71,6 +71,8 @@ def wgangp_gradient_penalty(net_input, fake, actions, discriminator, weight, bac
 
     if backward:
         gradient_penalty.backward(retain_graph=True)
+    else:
+        return gradient_penalty
 
     return gradient_penalty.item()
 
