@@ -36,6 +36,8 @@ class Agent:
 
         self.online_net, self.target_net, self.discrm_net = self._get_nets()
 
+        self.dqn_steps = 0
+
         self.gan_alpha = 0.1
         self.gan_steps = 0
         self.steps_per_scale = int(25e3)
@@ -145,6 +147,8 @@ class Agent:
             return action, features
 
     def _dqn_loss(self, log_ps, states, actions, returns, next_states, nonterminals):
+        self.dqn_steps += 1
+
         log_ps_a = log_ps[range(self.batch_size), actions]
 
         with torch.no_grad():
@@ -181,22 +185,28 @@ class Agent:
 
         return idxs, states, actions, returns, next_states, nonterminals, weights
 
-    def _learn(self, mem, idxs, states, actions, returns, next_states, nonterminals, weights):
+    def _dqn_check(self, trainer, mem, idxs, loss, weights):
+        clip_grad_norm_(self.online_net.parameters(), self.norm_clip)
+
+        self.optimizer_o.step()
+
+        if self.dqn_steps == 1 or self.dqn_steps % 2000 == 0:
+            trainer.print_and_log(f"{datetime.now()} Loss:{(weights * loss).mean():.2f}")
+
+        mem.update_priorities(idxs, loss.detach().cpu().numpy())
+
+    def _learn(self, mem, trainer, idxs, states, actions, returns, next_states, nonterminals, weights):
         log_ps, _ = self.online_net(states, skip_gan=True, use_log_softmax=True)
         loss = self._dqn_loss(log_ps, states, actions, returns, next_states, nonterminals)
 
         self.optimizer_o.zero_grad()
 
         (weights * loss).mean().backward()
-        clip_grad_norm_(self.online_net.parameters(), self.norm_clip)
+        self._dqn_check(trainer, mem, idxs, loss, weights)
 
-        self.optimizer_o.step()
-
-        mem.update_priorities(idxs, loss.detach().cpu().numpy())
-
-    def learn(self, mem):
+    def learn(self, mem, trainer):
         idxs, states, actions, returns, next_states, nonterminals, weights = self._get_sample(mem)
-        self._learn(mem, idxs, states, actions, returns, next_states, nonterminals, weights)
+        self._learn(mem, trainer, idxs, states, actions, returns, next_states, nonterminals, weights)
 
     def learn_joint(self, mem, trainer):
         idxs, states, actions, returns, next_states, nonterminals, weights = self._get_sample(mem)
@@ -210,12 +220,7 @@ class Agent:
         all_loss_o += (weights * loss).mean() * (1 - self.gan_alpha)
         all_loss_o.backward(retain_graph=True)
         finite_check(self.online_net.parameters())
-        clip_grad_norm_(self.online_net.parameters(), self.norm_clip)
-
-        self.optimizer_o.step()
-
-        mem.update_priorities(idxs, loss.detach().cpu().numpy())
-
+        self._dqn_check(trainer, mem, idxs, loss, weights)
         self._gan_check(trainer, pgan_states, pgan_next_states, pred_fake_g, loss_dict)
 
     def _gan_loss(self, states, actions, next_states, gan_alpha=None):
