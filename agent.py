@@ -16,8 +16,8 @@ from network_utils import WGANGP, finite_check, wgangp_gradient_penalty
 
 
 class Agent:
-    def __init__(self, env, atoms, v_min, v_max, batch_size, multi_step,
-                 discount, norm_clip, lr, adam_eps, hidden_size, noisy_std, load_file=None):
+    def __init__(self, env, atoms, v_min, v_max, batch_size, multi_step, discount,
+                 norm_clip, lr, adam_eps, hidden_size, noisy_std, gan_alpha, load_file=None):
         self.device = torch.device("cuda:0")
         self.env = env
         self.in_channels = self.env.window * 3 if self.env.view_mode == "rgb" else self.env.window
@@ -38,7 +38,7 @@ class Agent:
 
         self.dqn_steps = 0
 
-        self.gan_alpha = 0.1
+        self.gan_alpha = gan_alpha
         self.gan_steps = 0
         self.steps_per_scale = int(25e3)
         self.scale = 0
