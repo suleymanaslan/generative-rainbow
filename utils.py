@@ -9,7 +9,7 @@ from datetime import datetime
 
 class Trainer:
     def __init__(self, max_steps, replay_frequency, reward_clip, learning_start_step,
-                 target_update, gan_steps, eval_steps, plot_steps, training_mode="joint"):
+                 target_update, gan_steps, gan_scale_steps, eval_steps, plot_steps, training_mode="joint"):
         self.max_steps = max_steps
         self.replay_frequency = replay_frequency
         self.reward_clip = reward_clip
@@ -18,6 +18,7 @@ class Trainer:
         self.training_mode = training_mode
         assert self.training_mode in ["joint", "separate", "frozen", "dqn_only", "gan_only"]
         self.gan_steps = gan_steps
+        self.gan_scale_steps = gan_scale_steps
         self.eval_steps = eval_steps
         self.plot_steps = plot_steps
         self.ep_rewards = []
@@ -73,7 +74,8 @@ class Trainer:
                             agent.learn_joint(mem, self)
                     elif self.training_mode == "separate":
                         if steps % self.gan_steps == 0:
-                            agent.learn_gan(mem, self)
+                            agent.learn_gan(mem, self,
+                                            repeat=(self.gan_steps * agent.steps_per_scale) // self.gan_scale_steps)
                         if steps % self.replay_frequency == 0:
                             agent.learn(mem, self)
                     elif self.training_mode == "dqn_only":

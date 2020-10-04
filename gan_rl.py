@@ -26,8 +26,9 @@ mem = ReplayMemory(int(50e3), env, agent.discount, agent.n,
                    priority_weight=0.4, priority_exponent=0.5)
 trainer = Trainer(max_steps=int(3e6), replay_frequency=16, reward_clip=5.0,
                   learning_start_step=int(5e3), target_update=int(2e3),
-                  gan_steps=int(150e3), eval_steps=int(50e3), plot_steps=int(25e3),
-                  training_mode="joint")
+                  gan_steps=int(400e3), gan_scale_steps=int(400e3),
+                  eval_steps=int(50e3), plot_steps=int(25e3),
+                  training_mode="separate")
 
 trainer.train(env, train_env, test_env, agent, mem, file="gan_rl.py")
 trainer.save(agent)
