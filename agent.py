@@ -11,7 +11,7 @@ import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
 from layers import mixed_pool2d
 
-from network import DQN, GeneratorDQN, PGANDiscriminator
+from network import FullDQN, GeneratorDQN, Discriminator
 from network_utils import WGANGP, finite_check, wgangp_gradient_penalty
 
 
@@ -80,11 +80,11 @@ class Agent:
 
     def _get_nets(self):
         img_dim = 3 if self.env.view_mode == "rgb" else 1
-        online_net = GeneratorDQN(self.atoms, self.action_size, self.in_channels, self.hidden_size,
+        online_net = GeneratorDQN(self.in_channels, self.hidden_size, self.atoms, self.action_size,
                                   self.noisy_std, dim_output=img_dim, residual_network=False).to(self.device)
-        target_net = DQN(self.atoms, self.action_size, self.in_channels, self.hidden_size,
-                         self.noisy_std, residual_network=False).to(self.device)
-        discrm_net = PGANDiscriminator(self.action_size, dim_input=img_dim)
+        target_net = FullDQN(self.in_channels, self.hidden_size, self.atoms, self.action_size,
+                             self.noisy_std, residual_network=False).to(self.device)
+        discrm_net = Discriminator(self.action_size, dim_input=img_dim)
         return online_net, target_net, discrm_net
 
     def train(self):
@@ -120,11 +120,8 @@ class Agent:
         imageio.imwrite(f"{save_dir}/{int(time.time())}.jpg", pgan_img)
 
     def update_target_net(self):
-        self.target_net.net.load_state_dict(self.online_net.net.state_dict())
-        self.target_net.fc_h_v.load_state_dict(self.online_net.fc_h_v.state_dict())
-        self.target_net.fc_h_a.load_state_dict(self.online_net.fc_h_a.state_dict())
-        self.target_net.fc_z_v.load_state_dict(self.online_net.fc_z_v.state_dict())
-        self.target_net.fc_z_a.load_state_dict(self.online_net.fc_z_a.state_dict())
+        self.target_net.encoder.load_state_dict(self.online_net.encoder.state_dict())
+        self.target_net.dqn.load_state_dict(self.online_net.dqn.state_dict())
 
     def reset_noise(self):
         self.online_net.reset_noise()
@@ -156,7 +153,7 @@ class Agent:
             dns = self.support.expand_as(pns) * pns
             argmax_indices_ns = dns.sum(2).argmax(1)
             self.target_net.reset_noise()
-            pns, _ = self.target_net(next_states)
+            pns = self.target_net(next_states)
             pns_a = pns[range(self.batch_size), argmax_indices_ns]
 
             tz = returns.unsqueeze(1) + nonterminals * (self.discount ** self.n) * self.support.unsqueeze(0)

@@ -8,13 +8,10 @@ from layers import flatten, upscale2d, EqualizedLinear, EqualizedConv2d, Equaliz
 from network_utils import mini_batch_std_dev
 
 
-class DQN(nn.Module):
-    def __init__(self, atoms, action_size, history_length, hidden_size, noisy_std, residual_network=False):
-        super(DQN, self).__init__()
-        self.atoms = atoms
-        self.action_size = action_size
+class Encoder(nn.Module):
+    def __init__(self, history_length, residual_network):
+        super(Encoder, self).__init__()
         self.history_length = history_length
-        self.hidden_size = hidden_size
         self.residual_network = residual_network
 
         if self.residual_network:
@@ -28,11 +25,6 @@ class DQN(nn.Module):
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
 
-        self.fc_h_v = NoisyLinear(self.feat_size, self.hidden_size, std_init=noisy_std)
-        self.fc_h_a = NoisyLinear(self.feat_size, self.hidden_size, std_init=noisy_std)
-        self.fc_z_v = NoisyLinear(self.hidden_size, self.atoms, std_init=noisy_std)
-        self.fc_z_a = NoisyLinear(self.hidden_size, self.action_size * self.atoms, std_init=noisy_std)
-
     def _get_net(self):
         if self.residual_network:
             net = nn.Sequential(self.layer1, self.layer2, self.layer3)
@@ -41,21 +33,25 @@ class DQN(nn.Module):
                                 nn.Conv2d(64, 64, 3, stride=2, padding=1), nn.ReLU(inplace=True),
                                 nn.Conv2d(64, 64, 3, stride=2, padding=1), nn.ReLU(inplace=True),
                                 )
-
         feat_size = 4096
         return net, feat_size
 
-    def forward(self, x, use_log_softmax=False):
-        x = self.net(x)
-        x = x.view(-1, self.feat_size)
+    def forward(self, x):
+        return self.net(x).view(-1, self.feat_size)
 
-        v = self.fc_z_v(F.relu(self.fc_h_v(x), inplace=True))
-        a = self.fc_z_a(F.relu(self.fc_h_a(x), inplace=True))
-        v, a = v.view(-1, 1, self.atoms), a.view(-1, self.action_size, self.atoms)
-        q = v + a - a.mean(1, keepdim=True)
-        q = F.log_softmax(q, dim=2) if use_log_softmax else F.softmax(q, dim=2)
 
-        return q, x
+class DQN(nn.Module):
+    def __init__(self, feat_size, hidden_size, atoms, action_size, noisy_std):
+        super(DQN, self).__init__()
+        self.feat_size = feat_size
+        self.hidden_size = hidden_size
+        self.atoms = atoms
+        self.action_size = action_size
+
+        self.fc_h_v = NoisyLinear(self.feat_size, self.hidden_size, std_init=noisy_std)
+        self.fc_h_a = NoisyLinear(self.feat_size, self.hidden_size, std_init=noisy_std)
+        self.fc_z_v = NoisyLinear(self.hidden_size, self.atoms, std_init=noisy_std)
+        self.fc_z_a = NoisyLinear(self.hidden_size, self.action_size * self.atoms, std_init=noisy_std)
 
     def reset_noise(self):
         self.fc_h_v.reset_noise()
@@ -63,15 +59,39 @@ class DQN(nn.Module):
         self.fc_z_v.reset_noise()
         self.fc_z_a.reset_noise()
 
+    def forward(self, x, use_log_softmax=False):
+        v = self.fc_z_v(F.relu(self.fc_h_v(x), inplace=True))
+        a = self.fc_z_a(F.relu(self.fc_h_a(x), inplace=True))
+        v, a = v.view(-1, 1, self.atoms), a.view(-1, self.action_size, self.atoms)
+        q = v + a - a.mean(1, keepdim=True)
+        q = F.log_softmax(q, dim=2) if use_log_softmax else F.softmax(q, dim=2)
+        return q
 
-class GeneratorDQN(DQN):
-    def __init__(self, atoms, action_size, history_length, hidden_size, noisy_std, dim_output=1,
-                 residual_network=False):
-        super(GeneratorDQN, self).__init__(atoms, action_size, history_length, hidden_size, noisy_std, residual_network)
+
+class FullDQN(nn.Module):
+    def __init__(self, history_length, hidden_size, atoms, action_size, noisy_std, residual_network=False):
+        super(FullDQN, self).__init__()
+        self.encoder = Encoder(history_length, residual_network)
+        self.dqn = DQN(self.encoder.feat_size, hidden_size, atoms, action_size, noisy_std)
+
+    def reset_noise(self):
+        self.dqn.reset_noise()
+
+    def forward(self, x, use_log_softmax=False):
+        x = self.encoder(x)
+        q = self.dqn(x, use_log_softmax)
+        return q
+
+
+class Generator(nn.Module):
+    def __init__(self, feat_size, action_size, dim_output=1):
+        super(Generator, self).__init__()
+        self.feat_size = feat_size
+        self.action_size = action_size
+        self.dim_output = dim_output
         self.depth_scale0 = 128
         self.equalized_lr = True
         self.init_bias_to_zero = True
-        self.dim_output = dim_output
         self.dim_latent = self.feat_size + self.action_size
         self.scales_depth = [self.depth_scale0]
 
@@ -115,19 +135,7 @@ class GeneratorDQN(DQN):
     def set_alpha(self, alpha):
         self.alpha = alpha
 
-    def forward(self, x, skip_gan=False, actions=None, use_log_softmax=False):
-        x = self.net(x)
-        x = x.view(-1, self.feat_size)
-
-        v = self.fc_z_v(F.relu(self.fc_h_v(x), inplace=True))
-        a = self.fc_z_a(F.relu(self.fc_h_a(x), inplace=True))
-        v, a = v.view(-1, 1, self.atoms), a.view(-1, self.action_size, self.atoms)
-        q = v + a - a.mean(1, keepdim=True)
-        q = F.log_softmax(q, dim=2) if use_log_softmax else F.softmax(q, dim=2)
-
-        if skip_gan:
-            return q, x
-
+    def forward(self, x, actions):
         x = self.normalization_layer(x)
         x = flatten(x)
         x = torch.cat((x, actions), dim=1)
@@ -160,12 +168,42 @@ class GeneratorDQN(DQN):
         if self.generation_activation is not None:
             x = self.generation_activation(x)
 
+        return x
+
+
+class GeneratorDQN(nn.Module):
+    def __init__(self, history_length, hidden_size, atoms, action_size, noisy_std, dim_output=1,
+                 residual_network=False):
+        super(GeneratorDQN, self).__init__()
+        self.encoder = Encoder(history_length, residual_network)
+        self.dqn = DQN(self.encoder.feat_size, hidden_size, atoms, action_size, noisy_std)
+        self.generator = Generator(self.encoder.feat_size, action_size, dim_output)
+
+    def add_scale(self, depth_new_scale):
+        self.generator.add_scale(depth_new_scale)
+
+    def set_alpha(self, alpha):
+        self.generator.set_alpha(alpha)
+
+    def reset_noise(self):
+        self.dqn.reset_noise()
+
+    def forward(self, x, skip_gan=False, actions=None, use_log_softmax=False):
+        x = self.encoder(x)
+        q = self.dqn(x, use_log_softmax)
+
+        if skip_gan:
+            return q, x
+
+        assert actions is not None
+        x = self.generator(x, actions)
+
         return q, x
 
 
-class PGANDiscriminator(nn.Module):
+class Discriminator(nn.Module):
     def __init__(self, action_size, dim_input=1):
-        super(PGANDiscriminator, self).__init__()
+        super(Discriminator, self).__init__()
         self.action_size = action_size
         self.depth_scale0 = 128
         self.equalized_lr = True
