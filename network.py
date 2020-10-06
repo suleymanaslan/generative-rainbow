@@ -171,6 +171,28 @@ class Generator(nn.Module):
         return x
 
 
+class FullGenerator(nn.Module):
+    def __init__(self, history_length, action_size, dim_output=1, residual_network=False):
+        super(FullGenerator, self).__init__()
+        self.encoder = Encoder(history_length, residual_network)
+        self.generator = Generator(self.encoder.feat_size, action_size, dim_output)
+
+    def add_scale(self, depth_new_scale):
+        self.generator.add_scale(depth_new_scale)
+
+    def set_alpha(self, alpha):
+        self.generator.set_alpha(alpha)
+
+    def forward(self, x, skip_gan=False, actions=None):
+        feat = self.encoder(x)
+
+        if skip_gan:
+            return feat
+
+        assert actions is not None
+        return self.generator(feat, actions)
+
+
 class GeneratorDQN(nn.Module):
     def __init__(self, history_length, hidden_size, atoms, action_size, noisy_std, dim_output=1,
                  residual_network=False):

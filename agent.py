@@ -11,13 +11,13 @@ import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
 from layers import mixed_pool2d
 
-from network import FullDQN, GeneratorDQN, Discriminator
+from network import DQN, FullDQN, FullGenerator, GeneratorDQN, Discriminator
 from network_utils import WGANGP, finite_check, wgangp_gradient_penalty
 
 
 class Agent:
     def __init__(self, env, atoms, v_min, v_max, batch_size, multi_step, discount,
-                 norm_clip, lr, adam_eps, hidden_size, noisy_std, gan_alpha, load_file=None):
+                 norm_clip, lr, adam_eps, hidden_size, noisy_std, gan_alpha, training_mode="joint", load_file=None):
         self.device = torch.device("cuda:0")
         self.env = env
         self.in_channels = self.env.window * 3 if self.env.view_mode == "rgb" else self.env.window
@@ -33,12 +33,16 @@ class Agent:
         self.discount = discount
         self.norm_clip = norm_clip
         self.noisy_std = noisy_std
+        self.lr = lr
+        self.adam_eps = adam_eps
+        self.gan_alpha = gan_alpha
 
-        self.online_net, self.target_net, self.discrm_net = self._get_nets()
+        self.training_mode = training_mode
+        assert self.training_mode in ["joint", "separate", "gan_feat", "branch", "dqn_only", "gan_only"]
+        self._init_nets()
+        self._init_optimizers()
 
         self.dqn_steps = 0
-
-        self.gan_alpha = gan_alpha
         self.gan_steps = 0
         self.steps_per_scale = int(25e3)
         self.scale = 0
@@ -47,26 +51,12 @@ class Agent:
         self.model_alpha = 0.0
         self.alpha_update_cons = 0.002
 
-        self.discrm_net.to(self.device)
-        self.online_net.to(self.device)
-
         self.online_net.train()
         self.update_target_net()
         self.target_net.train()
 
         for param in self.target_net.parameters():
             param.requires_grad = False
-
-        self.lr = lr
-        self.adam_eps = adam_eps
-
-        self.optimizer_o = optim.Adam(filter(lambda p: p.requires_grad, self.online_net.parameters()),
-                                      betas=(0, 0.99), lr=self.lr, eps=self.adam_eps)
-        self.optimizer_d = optim.Adam(filter(lambda p: p.requires_grad, self.discrm_net.parameters()),
-                                      betas=(0, 0.99), lr=self.lr)
-
-        self.optimizer_o.zero_grad()
-        self.optimizer_d.zero_grad()
 
         self.loss_criterion = WGANGP(self.device)
         self.epsilon_d = 0.001
@@ -78,14 +68,38 @@ class Agent:
         if load_file:
             self.load(f"trained_models/{load_file}")
 
-    def _get_nets(self):
+    def _init_nets(self):
         img_dim = 3 if self.env.view_mode == "rgb" else 1
-        online_net = GeneratorDQN(self.in_channels, self.hidden_size, self.atoms, self.action_size,
-                                  self.noisy_std, dim_output=img_dim, residual_network=False).to(self.device)
-        target_net = FullDQN(self.in_channels, self.hidden_size, self.atoms, self.action_size,
-                             self.noisy_std, residual_network=False).to(self.device)
-        discrm_net = Discriminator(self.action_size, dim_input=img_dim)
-        return online_net, target_net, discrm_net
+        if self.training_mode == "gan_feat":
+            self.generator_net = FullGenerator(self.in_channels, self.action_size, dim_output=img_dim,
+                                               residual_network=False).to(self.device)
+            self.online_net = DQN(self.generator_net.encoder.feat_size, self.hidden_size, self.atoms, self.action_size,
+                                  self.noisy_std).to(self.device)
+            self.target_net = DQN(self.generator_net.encoder.feat_size, self.hidden_size, self.atoms, self.action_size,
+                                  self.noisy_std).to(self.device)
+            self.discrm_net = Discriminator(self.action_size, dim_input=img_dim).to(self.device)
+        else:
+            self.online_net = GeneratorDQN(self.in_channels, self.hidden_size, self.atoms, self.action_size,
+                                           self.noisy_std, dim_output=img_dim, residual_network=False).to(self.device)
+            self.target_net = FullDQN(self.in_channels, self.hidden_size, self.atoms, self.action_size, self.noisy_std,
+                                      residual_network=False).to(self.device)
+            self.discrm_net = Discriminator(self.action_size, dim_input=img_dim).to(self.device)
+
+    def _init_optimizers(self):
+        if self.training_mode == "gan_feat":
+            self.optimizer_g = optim.Adam(filter(lambda p: p.requires_grad, self.generator_net.parameters()),
+                                          betas=(0, 0.99), lr=self.lr)
+            self.optimizer_o = optim.Adam(filter(lambda p: p.requires_grad, self.online_net.parameters()),
+                                          lr=self.lr, eps=self.adam_eps)
+            self.optimizer_d = optim.Adam(filter(lambda p: p.requires_grad, self.discrm_net.parameters()),
+                                          betas=(0, 0.99), lr=self.lr)
+        else:
+            self.optimizer_o = optim.Adam(filter(lambda p: p.requires_grad, self.online_net.parameters()),
+                                          betas=(0, 0.99), lr=self.lr, eps=self.adam_eps)
+            self.optimizer_d = optim.Adam(filter(lambda p: p.requires_grad, self.discrm_net.parameters()),
+                                          betas=(0, 0.99), lr=self.lr)
+            self.optimizer_o.zero_grad()
+            self.optimizer_d.zero_grad()
 
     def train(self):
         self.online_net.train()
@@ -120,16 +134,22 @@ class Agent:
         imageio.imwrite(f"{save_dir}/{int(time.time())}.jpg", pgan_img)
 
     def update_target_net(self):
-        self.target_net.encoder.load_state_dict(self.online_net.encoder.state_dict())
-        self.target_net.dqn.load_state_dict(self.online_net.dqn.state_dict())
+        if self.training_mode == "gan_feat":
+            self.target_net.load_state_dict(self.online_net.state_dict())
+        else:
+            self.target_net.encoder.load_state_dict(self.online_net.encoder.state_dict())
+            self.target_net.dqn.load_state_dict(self.online_net.dqn.state_dict())
 
     def reset_noise(self):
         self.online_net.reset_noise()
 
     def _act(self, state):
         with torch.no_grad():
-            q, x = self.online_net(state.unsqueeze(0), skip_gan=True)
-            return (q * self.support).sum(2).argmax(1).item(), x
+            if self.training_mode == "gan_feat":
+                q = self.online_net(self.generator_net(state.unsqueeze(0), skip_gan=True))
+            else:
+                q, _ = self.online_net(state.unsqueeze(0), skip_gan=True)
+            return (q * self.support).sum(2).argmax(1).item()
 
     def act(self, state):
         if self.env.view_mode == "rgb":
@@ -143,17 +163,23 @@ class Agent:
         else:
             return action, features
 
-    def _dqn_loss(self, log_ps, states, actions, returns, next_states, nonterminals):
+    def _dqn_loss(self, log_ps, states, actions, returns, next_states, nonterminals, gan_feat=False):
         self.dqn_steps += 1
 
         log_ps_a = log_ps[range(self.batch_size), actions]
 
         with torch.no_grad():
-            pns, _ = self.online_net(next_states, skip_gan=True)
+            if gan_feat:
+                pns = self.online_net(self.generator_net(next_states, skip_gan=True))
+            else:
+                pns, _ = self.online_net(next_states, skip_gan=True)
             dns = self.support.expand_as(pns) * pns
             argmax_indices_ns = dns.sum(2).argmax(1)
             self.target_net.reset_noise()
-            pns = self.target_net(next_states)
+            if gan_feat:
+                pns = self.target_net(self.generator_net(next_states, skip_gan=True))
+            else:
+                pns = self.target_net(next_states)
             pns_a = pns[range(self.batch_size), argmax_indices_ns]
 
             tz = returns.unsqueeze(1) + nonterminals * (self.discount ** self.n) * self.support.unsqueeze(0)
@@ -220,9 +246,36 @@ class Agent:
         self._dqn_check(trainer, mem, idxs, loss, weights)
         self._gan_check(trainer, pgan_states, pgan_next_states, pred_fake_g, loss_dict)
 
-    def _gan_loss(self, states, actions, next_states, gan_alpha=None):
+    def learn_gan_feat(self, mem, trainer):
+        idxs, states, actions, returns, next_states, nonterminals, weights = self._get_sample(mem)
+
+        _, pgan_states, pgan_next_states, pred_fake_g, loss_dict = self._gan_loss(states, actions, next_states,
+                                                                                  gan_alpha=1, gan_feat=True)
+
+        loss_dict["g_fake"].backward(retain_graph=True)
+        finite_check(self.generator_net.parameters())
+
+        self.optimizer_g.step()
+
+        self._gan_check(trainer, pgan_states, pgan_next_states, pred_fake_g, loss_dict, gan_feat=True)
+
+        log_ps = self.online_net(self.generator_net(states, skip_gan=True), use_log_softmax=True)
+        loss = self._dqn_loss(log_ps, states, actions, returns, next_states, nonterminals, gan_feat=True)
+
+        self.optimizer_o.zero_grad()
+        (weights * loss).mean().backward()
+        self._dqn_check(trainer, mem, idxs, loss, weights)
+
+    def _gan_loss(self, states, actions, next_states, gan_alpha=None, gan_feat=False):
         if gan_alpha is None:
             gan_alpha = self.gan_alpha
+
+        if gan_feat:
+            generator_net = self.generator_net
+            generator_optimizer = self.optimizer_g
+        else:
+            generator_net = self.online_net
+            generator_optimizer = self.optimizer_o
 
         self.gan_steps += 1
         actions_one_hot = torch.eye(self.action_size)[actions].to(self.device)
@@ -264,7 +317,7 @@ class Agent:
             pgan_next_states = pgan_next_states.unsqueeze(1)
 
         self.discrm_net.set_alpha(self.model_alpha)
-        self.online_net.set_alpha(self.model_alpha)
+        generator_net.set_alpha(self.model_alpha)
 
         self.optimizer_d.zero_grad()
 
@@ -273,7 +326,11 @@ class Agent:
         loss_d = self.loss_criterion.get_criterion(pred_real_d, True)
         all_loss_d = loss_d
 
-        log_ps, pred_fake_g = self.online_net(states, actions=actions_one_hot, use_log_softmax=True)
+        if gan_feat:
+            pred_fake_g = generator_net(states, actions=actions_one_hot)
+            log_ps = None
+        else:
+            log_ps, pred_fake_g = generator_net(states, actions=actions_one_hot, use_log_softmax=True)
 
         if self.env.view_mode == "rgb":
             img_size = 2 ** (self.scale + 2)
@@ -299,7 +356,7 @@ class Agent:
         self.optimizer_d.step()
 
         self.optimizer_d.zero_grad()
-        self.optimizer_o.zero_grad()
+        generator_optimizer.zero_grad()
 
         pred_fake_d, phi_g_fake = self.discrm_net(
             torch.cat((pgan_states, pred_fake_g), dim=2), actions_one_hot, True)
@@ -313,7 +370,9 @@ class Agent:
 
         return log_ps, pgan_states, pgan_next_states, pred_fake_g, loss_dict
 
-    def _gan_check(self, trainer, pgan_states, pgan_next_states, pred_fake_g, loss_dict):
+    def _gan_check(self, trainer, pgan_states, pgan_next_states, pred_fake_g, loss_dict, gan_feat=False):
+        generator_net = self.generator_net if gan_feat else self.online_net
+
         if self.gan_steps == 1 or self.gan_steps % (self.steps_per_scale // 10) == 0:
             trainer.print_and_log(f"{datetime.now()} "
                                   f"[{self.scale}/{self.max_scale}][{self.gan_steps:05d}/{self.steps_per_scale}], "
@@ -335,18 +394,13 @@ class Agent:
             self.gan_steps = 0
             if self.scale < self.max_scale:
                 self.discrm_net.add_scale(depth_new_scale=128)
-                self.online_net.add_scale(depth_new_scale=128)
+                generator_net.add_scale(depth_new_scale=128)
 
                 self.discrm_net.to(self.device)
-                self.online_net.to(self.device)
+                generator_net.to(self.device)
 
-                self.optimizer_o = optim.Adam(filter(lambda p: p.requires_grad, self.online_net.parameters()),
-                                              betas=(0, 0.99), lr=self.lr, eps=self.adam_eps)
-                self.optimizer_d = optim.Adam(filter(lambda p: p.requires_grad, self.discrm_net.parameters()),
-                                              betas=(0, 0.99), lr=self.lr)
+                self._init_optimizers()
 
-                self.optimizer_d.zero_grad()
-                self.optimizer_o.zero_grad()
                 self.scale += 1
                 self.model_alpha = 1.0
 

@@ -9,14 +9,13 @@ from datetime import datetime
 
 class Trainer:
     def __init__(self, max_steps, replay_frequency, reward_clip, learning_start_step,
-                 target_update, gan_steps, gan_scale_steps, eval_steps, plot_steps, training_mode="joint"):
+                 target_update, gan_steps, gan_scale_steps, eval_steps, plot_steps, training_mode):
         self.max_steps = max_steps
         self.replay_frequency = replay_frequency
         self.reward_clip = reward_clip
         self.learning_start_step = learning_start_step
         self.target_update = target_update
         self.training_mode = training_mode
-        assert self.training_mode in ["joint", "separate", "frozen", "dqn_only", "gan_only"]
         self.gan_steps = gan_steps
         self.gan_scale_steps = gan_scale_steps
         self.eval_steps = eval_steps
@@ -51,7 +50,7 @@ class Trainer:
         while not finished:
             observation, ep_reward, done = env.reset(), 0, False
             while not done:
-                action, _ = agent.act(observation)
+                action = agent.act(observation)
                 next_observation, reward, done, info = env.step(action)
                 ep_reward += reward
                 steps += 1
@@ -78,6 +77,9 @@ class Trainer:
                                             repeat=(self.gan_steps * agent.steps_per_scale) // self.gan_scale_steps)
                         if steps % self.replay_frequency == 0:
                             agent.learn(mem, self)
+                    elif self.training_mode == "gan_feat":
+                        if steps % self.replay_frequency == 0:
+                            agent.learn_gan_feat(mem, self)
                     elif self.training_mode == "dqn_only":
                         if steps % self.replay_frequency == 0:
                             agent.learn(mem, self)
@@ -133,7 +135,7 @@ class Trainer:
         for _ in range(num_levels):
             observation, ep_reward, done = env.reset(), 0, False
             while not done:
-                action, _ = agent.act(observation)
+                action = agent.act(observation)
                 next_observation, reward, done, info = env.step(action)
                 ep_reward += reward
                 observation = next_observation
