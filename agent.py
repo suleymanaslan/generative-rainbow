@@ -11,7 +11,7 @@ import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
 from layers import mixed_pool2d
 
-from network import DQN, FullDQN, FullGenerator, GeneratorDQN, Discriminator
+from network import Encoder, DQN, FullDQN, FullGenerator, GeneratorDQN, Discriminator
 from network_utils import WGANGP, finite_check, wgangp_gradient_penalty
 
 
@@ -51,19 +51,14 @@ class Agent:
         self.model_alpha = 0.0
         self.alpha_update_cons = 0.002
 
-        self.online_net.train()
-        self.update_target_net()
-        self.target_net.train()
-
-        for param in self.target_net.parameters():
-            param.requires_grad = False
-
         self.loss_criterion = WGANGP(self.device)
         self.epsilon_d = 0.001
 
         self.real_state = None
         self.real_next_state = None
         self.generated_state = None
+
+        self.update_target_net()
 
         if load_file:
             self.load(f"trained_models/{load_file}")
@@ -73,17 +68,25 @@ class Agent:
         if self.training_mode == "gan_feat":
             self.generator_net = FullGenerator(self.in_channels, self.action_size, dim_output=img_dim,
                                                residual_network=False).to(self.device)
+            self.target_g_net = Encoder(self.in_channels, residual_network=False).to(self.device)
             self.online_net = DQN(self.generator_net.encoder.feat_size, self.hidden_size, self.atoms, self.action_size,
                                   self.noisy_std).to(self.device)
             self.target_net = DQN(self.generator_net.encoder.feat_size, self.hidden_size, self.atoms, self.action_size,
                                   self.noisy_std).to(self.device)
             self.discrm_net = Discriminator(self.action_size, dim_input=img_dim).to(self.device)
+            for param in self.target_g_net.parameters():
+                param.requires_grad = False
         else:
             self.online_net = GeneratorDQN(self.in_channels, self.hidden_size, self.atoms, self.action_size,
                                            self.noisy_std, dim_output=img_dim, residual_network=False).to(self.device)
             self.target_net = FullDQN(self.in_channels, self.hidden_size, self.atoms, self.action_size, self.noisy_std,
                                       residual_network=False).to(self.device)
             self.discrm_net = Discriminator(self.action_size, dim_input=img_dim).to(self.device)
+
+        self.online_net.train()
+        self.target_net.train()
+        for param in self.target_net.parameters():
+            param.requires_grad = False
 
     def _init_optimizers(self):
         if self.training_mode == "gan_feat":
@@ -108,11 +111,17 @@ class Agent:
         self.online_net.eval()
 
     def save(self, save_dir):
+        if self.training_mode == "gan_feat":
+            torch.save(self.generator_net.state_dict(), f"{save_dir}/generator_net.pth")
+            torch.save(self.target_g_net.state_dict(), f"{save_dir}/target_g_net.pth")
         torch.save(self.online_net.state_dict(), f"{save_dir}/online_net.pth")
         torch.save(self.target_net.state_dict(), f"{save_dir}/target_net.pth")
         torch.save(self.discrm_net.state_dict(), f"{save_dir}/discrm_net.pth")
 
     def load(self, load_dir):
+        if self.training_mode == "gan_feat":
+            self.generator_net.load_state_dict(torch.load(f"{load_dir}/generator_net.pth"))
+            self.target_g_net.load_state_dict(torch.load(f"{load_dir}/target_g_net.pth"))
         self.online_net.load_state_dict(torch.load(f"{load_dir}/online_net.pth"))
         self.target_net.load_state_dict(torch.load(f"{load_dir}/target_net.pth"))
         self.discrm_net.load_state_dict(torch.load(f"{load_dir}/discrm_net.pth"))
@@ -135,6 +144,7 @@ class Agent:
 
     def update_target_net(self):
         if self.training_mode == "gan_feat":
+            self.target_g_net.load_state_dict(self.generator_net.encoder.state_dict())
             self.target_net.load_state_dict(self.online_net.state_dict())
         else:
             self.target_net.encoder.load_state_dict(self.online_net.encoder.state_dict())
@@ -170,14 +180,14 @@ class Agent:
 
         with torch.no_grad():
             if gan_feat:
-                pns = self.online_net(self.generator_net(next_states, skip_gan=True))
+                pns = self.online_net(self.target_g_net(next_states))
             else:
                 pns, _ = self.online_net(next_states, skip_gan=True)
             dns = self.support.expand_as(pns) * pns
             argmax_indices_ns = dns.sum(2).argmax(1)
             self.target_net.reset_noise()
             if gan_feat:
-                pns = self.target_net(self.generator_net(next_states, skip_gan=True))
+                pns = self.target_net(self.target_g_net(next_states))
             else:
                 pns = self.target_net(next_states)
             pns_a = pns[range(self.batch_size), argmax_indices_ns]
@@ -259,7 +269,7 @@ class Agent:
 
         self._gan_check(trainer, pgan_states, pgan_next_states, pred_fake_g, loss_dict, gan_feat=True)
 
-        log_ps = self.online_net(self.generator_net(states, skip_gan=True), use_log_softmax=True)
+        log_ps = self.online_net(self.target_g_net(states), use_log_softmax=True)
         loss = self._dqn_loss(log_ps, states, actions, returns, next_states, nonterminals, gan_feat=True)
 
         self.optimizer_o.zero_grad()
