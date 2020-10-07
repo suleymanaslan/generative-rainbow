@@ -1,16 +1,12 @@
-import time
-import os
-import shutil
-import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
 from datetime import datetime
 
+from utils import Trainer
 
-class Trainer:
+
+class RainbowTrainer(Trainer):
     def __init__(self, max_steps, replay_frequency, reward_clip, learning_start_step,
                  target_update, gan_steps, gan_scale_steps, eval_steps, plot_steps, training_mode):
-        self.max_steps = max_steps
+        super(RainbowTrainer, self).__init__(max_steps, plot_steps)
         self.replay_frequency = replay_frequency
         self.reward_clip = reward_clip
         self.learning_start_step = learning_start_step
@@ -19,30 +15,9 @@ class Trainer:
         self.gan_steps = gan_steps
         self.gan_scale_steps = gan_scale_steps
         self.eval_steps = eval_steps
-        self.plot_steps = plot_steps
-        self.ep_rewards = []
-        self.ep_steps = []
-        self.train_ep_rewards = []
-        self.test_ep_rewards = []
-        self.eval_ep_steps = []
-        self.avg_ep_rewards = None
-        self.model_dir = None
-
-    def print_and_log(self, text):
-        print(text)
-        print(text, file=open(f'{self.model_dir}/log.txt', 'a'))
 
     def train(self, env, train_env, test_env, agent, mem, file=None):
-        training_timestamp = str(int(time.time()))
-        self.model_dir = f'trained_models/model_{training_timestamp}/'
-
-        if not os.path.exists(self.model_dir):
-            os.makedirs(self.model_dir)
-
-        if file:
-            shutil.copy2(f'./{file}', self.model_dir)
-
-        self.print_and_log(f"{datetime.now()}, start training")
+        self._init_training(file)
         priority_weight_increase = (1 - mem.priority_weight) / (self.max_steps - self.learning_start_step)
         finished = False
         episode = 0
@@ -99,38 +74,6 @@ class Trainer:
             if episode == 1 or episode % 100 == 0:
                 self.print_and_log(f"{datetime.now()}, episode:{episode:5d}, step:{steps:6d}, reward:{ep_reward:4.1f}")
         self.print_and_log(f"{datetime.now()}, end training")
-
-    def plot(self, max_reward=60):
-        self.avg_ep_rewards = [np.array(self.ep_rewards[max(0, i - 150):max(1, i)]).mean()
-                               for i in range(len(self.ep_rewards))]
-        plt.style.use('default')
-        sns.set()
-        plt.figure(figsize=(10, 6))
-        plt.gca().set_ylim([0, max_reward])
-        plt.gca().set_xlim([0, self.max_steps])
-        plt.yticks(np.arange(0, max_reward + 1, max_reward // 10))
-        plt.xticks(np.arange(0, self.max_steps + 1, self.max_steps // 6))
-        plt.plot(self.ep_steps, self.ep_rewards, alpha=0.5)
-        plt.plot(self.ep_steps, self.avg_ep_rewards, linewidth=3)
-        if len(self.eval_ep_steps) > 0:
-            plt.plot(self.eval_ep_steps, self.train_ep_rewards, linewidth=3)
-            plt.plot(self.eval_ep_steps, self.test_ep_rewards, linewidth=3)
-        plt.xlabel('steps')
-        plt.ylabel('episode reward')
-        plt.savefig(f"{self.model_dir}/training.png")
-        plt.close()
-
-    def save(self, agent):
-        agent.save(self.model_dir)
-
-        np.save(f"{self.model_dir}/ep_rewards.npy", self.ep_rewards)
-        np.save(f"{self.model_dir}/ep_steps.npy", self.ep_steps)
-        np.save(f"{self.model_dir}/train_ep_rewards.npy", self.train_ep_rewards)
-        np.save(f"{self.model_dir}/test_ep_rewards.npy", self.test_ep_rewards)
-        np.save(f"{self.model_dir}/eval_ep_steps.npy", self.eval_ep_steps)
-
-        self.plot()
-        plt.show()
 
     @staticmethod
     def _eval(env, num_levels, agent):
