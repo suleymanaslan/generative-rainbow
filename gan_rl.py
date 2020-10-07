@@ -1,7 +1,7 @@
 from env import StarPilotEnv
-from agent import Agent
-from replay_memory import ReplayMemory
-from utils import Trainer
+from rainbow.agent import Agent
+from rainbow.replay_memory import ReplayMemory
+from rainbow.utils import Trainer
 import torch
 import numpy as np
 

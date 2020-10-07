@@ -9,10 +9,10 @@ import numpy as np
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
-from layers import mixed_pool2d
+from rainbow.layers import mixed_pool2d
 
-from network import Encoder, DQN, FullDQN, BranchedDQN, FullGenerator, GeneratorDQN, BranchedGeneratorDQN, Discriminator
-from network_utils import WGANGP, finite_check, wgangp_gradient_penalty
+from rainbow.network import Encoder, DQN, FullDQN, BranchedDQN, FullGenerator, GeneratorDQN, BranchedGeneratorDQN, Discriminator
+from rainbow.network_utils import WGANGP, finite_check, wgangp_gradient_penalty
 
 
 class Agent:

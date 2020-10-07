@@ -3,9 +3,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from layers import flatten, upscale2d, EqualizedLinear, EqualizedConv2d, EqualizedConv3d, NormalizationLayer, \
+from rainbow.layers import flatten, upscale2d, EqualizedLinear, EqualizedConv2d, EqualizedConv3d, NormalizationLayer, \
     SqueezeLayer, NoisyLinear, BasicBlock
-from network_utils import mini_batch_std_dev
+from rainbow.network_utils import mini_batch_std_dev
 
 
 class Encoder(nn.Module):
