@@ -284,7 +284,7 @@ class Agent:
         self._dqn_check(trainer, mem, idxs, loss, weights)
 
     def learn_branch(self, mem, trainer):
-        self.learn(mem, trainer)
+        self.learn_joint(mem, trainer)
 
     def _gan_loss(self, states, actions, next_states, gan_alpha=None, gan_feat=False):
         if gan_alpha is None:
