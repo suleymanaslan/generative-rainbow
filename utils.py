@@ -83,6 +83,9 @@ class Trainer:
                     elif self.training_mode == "dqn_only":
                         if steps % self.replay_frequency == 0:
                             agent.learn(mem, self)
+                    elif self.training_mode == "branch":
+                        if steps % self.replay_frequency == 0:
+                            agent.learn_branch(mem, self)
                     elif self.training_mode == "gan_only":
                         agent.learn_gan(mem, self, repeat=1)
                     else:

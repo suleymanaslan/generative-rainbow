@@ -40,6 +40,19 @@ class Encoder(nn.Module):
         return self.net(x).view(-1, self.feat_size)
 
 
+class BranchedEncoder(Encoder):
+    def __init__(self, history_length, residual_network):
+        super(BranchedEncoder, self).__init__(history_length, residual_network)
+        self.dqn_conv = nn.Sequential(nn.Conv2d(64, 64, 1), nn.ReLU(inplace=True))
+        self.gan_conv = nn.Sequential(nn.Conv2d(64, 64, 1), nn.ReLU(inplace=True))
+
+    def forward(self, x):
+        net_feat = self.net(x)
+        dqn_feat = self.dqn_conv(net_feat).view(-1, self.feat_size)
+        gan_feat = self.gan_conv(net_feat).view(-1, self.feat_size)
+        return dqn_feat, gan_feat
+
+
 class DQN(nn.Module):
     def __init__(self, feat_size, hidden_size, atoms, action_size, noisy_std):
         super(DQN, self).__init__()
@@ -82,6 +95,20 @@ class FullDQN(nn.Module):
         q = self.dqn(x, use_log_softmax)
         return q
 
+
+class BranchedDQN(nn.Module):
+    def __init__(self, history_length, hidden_size, atoms, action_size, noisy_std, residual_network=False):
+        super(BranchedDQN, self).__init__()
+        self.encoder = BranchedEncoder(history_length, residual_network)
+        self.dqn = DQN(self.encoder.feat_size, hidden_size, atoms, action_size, noisy_std)
+
+    def reset_noise(self):
+        self.dqn.reset_noise()
+
+    def forward(self, x, use_log_softmax=False):
+        dqn_feat, _ = self.encoder(x)
+        q = self.dqn(dqn_feat, use_log_softmax)
+        return q
 
 class Generator(nn.Module):
     def __init__(self, feat_size, action_size, dim_output=1):
@@ -221,6 +248,40 @@ class GeneratorDQN(nn.Module):
         x = self.generator(x, actions)
 
         return q, x
+
+
+class BranchedGeneratorDQN(nn.Module):
+    def __init__(self, history_length, hidden_size, atoms, action_size, noisy_std, dim_output=1,
+                 residual_network=False):
+        super(BranchedGeneratorDQN, self).__init__()
+        self.encoder = BranchedEncoder(history_length, residual_network)
+        self.dqn = DQN(self.encoder.feat_size, hidden_size, atoms, action_size, noisy_std)
+        self.generator = Generator(self.encoder.feat_size, action_size, dim_output)
+
+    def add_scale(self, depth_new_scale):
+        self.generator.add_scale(depth_new_scale)
+
+    def set_alpha(self, alpha):
+        self.generator.set_alpha(alpha)
+
+    def reset_noise(self):
+        self.dqn.reset_noise()
+
+    def forward(self, x, skip_gan=False, skip_dqn=False, actions=None, use_log_softmax=False):
+        dqn_feat, gan_feat = self.encoder(x)
+
+        if skip_dqn:
+            q = None
+        else:
+            q = self.dqn(dqn_feat, use_log_softmax)
+
+        if skip_gan:
+            generated = None
+        else:
+            assert actions is not None
+            generated = self.generator(gan_feat, actions)
+
+        return q, generated
 
 
 class Discriminator(nn.Module):

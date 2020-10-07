@@ -11,7 +11,7 @@ import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
 from layers import mixed_pool2d
 
-from network import Encoder, DQN, FullDQN, FullGenerator, GeneratorDQN, Discriminator
+from network import Encoder, DQN, FullDQN, BranchedDQN, FullGenerator, GeneratorDQN, BranchedGeneratorDQN, Discriminator
 from network_utils import WGANGP, finite_check, wgangp_gradient_penalty
 
 
@@ -76,6 +76,13 @@ class Agent:
             self.discrm_net = Discriminator(self.action_size, dim_input=img_dim).to(self.device)
             for param in self.target_g_net.parameters():
                 param.requires_grad = False
+        elif self.training_mode == "branch":
+            self.online_net = BranchedGeneratorDQN(self.in_channels, self.hidden_size, self.atoms, self.action_size,
+                                                   self.noisy_std, dim_output=img_dim,
+                                                   residual_network=False).to(self.device)
+            self.target_net = BranchedDQN(self.in_channels, self.hidden_size, self.atoms, self.action_size,
+                                          self.noisy_std, residual_network=False).to(self.device)
+            self.discrm_net = Discriminator(self.action_size, dim_input=img_dim).to(self.device)
         else:
             self.online_net = GeneratorDQN(self.in_channels, self.hidden_size, self.atoms, self.action_size,
                                            self.noisy_std, dim_output=img_dim, residual_network=False).to(self.device)
@@ -275,6 +282,9 @@ class Agent:
         self.optimizer_o.zero_grad()
         (weights * loss).mean().backward()
         self._dqn_check(trainer, mem, idxs, loss, weights)
+
+    def learn_branch(self, mem, trainer):
+        self.learn(mem, trainer)
 
     def _gan_loss(self, states, actions, next_states, gan_alpha=None, gan_feat=False):
         if gan_alpha is None:
