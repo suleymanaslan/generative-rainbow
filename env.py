@@ -11,11 +11,18 @@ from PIL import Image
 
 
 class Env:
-    def __init__(self, action_size, history_length, view_mode="gray"):
+    def __init__(self, history_length, action_size=None, view_mode="gray"):
         self.device = torch.device("cuda:0")
         self.wrapped_env = self._get_env()
-        self.action_space = [i for i in range(action_size)]
+        if action_size is None:
+            action_size = self.wrapped_env.action_space.n
+        self.action_size = action_size
+        self.action_space = [i for i in range(self.action_size)]
         self.window = history_length
+        self.obs_shape = (self.window,
+                          self.wrapped_env.observation_space.shape[2],
+                          self.wrapped_env.observation_space.shape[0],
+                          self.wrapped_env.observation_space.shape[1])
         self.view_mode = view_mode
         assert self.view_mode in ["gray", "rgb"]
         self.state_buffer = deque([], maxlen=self.window)
@@ -104,13 +111,13 @@ class Env:
 
 
 class StarPilotEnv(Env):
-    def __init__(self, action_size, history_length, num_levels, start_level, distribution_mode, use_backgrounds,
-                 view_mode="gray"):
+    def __init__(self, history_length, num_levels, start_level, distribution_mode, use_backgrounds,
+                 action_size=None, view_mode="gray"):
         self.num_levels = num_levels
         self.start_level = start_level
         self.distribution_mode = distribution_mode
         self.use_backgrounds = use_backgrounds
-        super(StarPilotEnv, self).__init__(action_size, history_length, view_mode)
+        super(StarPilotEnv, self).__init__(history_length, action_size, view_mode)
 
     def _get_env(self):
         return gym.make("procgen:procgen-starpilot-v0", num_levels=self.num_levels, start_level=self.start_level,
