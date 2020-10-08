@@ -67,5 +67,5 @@ class Agent:
 
         # kl, ent, cf = pi_info['kl'], pi_info_old['ent'], pi_info['cf']
 
-    def save(self):
-        pass
+    def save(self, save_dir):
+        torch.save(self.actor_critic.state_dict(), f"{save_dir}/actor_critic.pth")

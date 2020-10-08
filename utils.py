@@ -8,9 +8,10 @@ from datetime import datetime
 
 
 class Trainer:
-    def __init__(self, max_steps, plot_steps):
+    def __init__(self, max_steps, plot_steps, eval_steps):
         self.max_steps = max_steps
         self.plot_steps = plot_steps
+        self.eval_steps = eval_steps
         self.ep_rewards = []
         self.ep_steps = []
         self.train_ep_rewards = []
@@ -66,3 +67,18 @@ class Trainer:
 
         self.plot()
         plt.show()
+
+    @staticmethod
+    def _eval(env, num_levels, agent):
+        pass
+
+    def eval(self, train_env, test_env, agent, steps):
+        train_reward = self._eval(train_env, test_env.num_levels * 2, agent)
+        self.train_ep_rewards.append(train_reward)
+        self.print_and_log(f"{datetime.now()}, train_reward:{train_reward:4.1f}")
+
+        test_reward = self._eval(test_env, test_env.num_levels * 2, agent)
+        self.test_ep_rewards.append(test_reward)
+        self.print_and_log(f"{datetime.now()}, test_reward:{test_reward:4.1f}")
+
+        self.eval_ep_steps.append(steps)

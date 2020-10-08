@@ -22,6 +22,6 @@ buffer = Buffer(size=1024, obs_shape=env.obs_shape, gamma=0.99, lam=0.97)
 actor_critic = ActorCritic(env, action_size=env.action_size)
 agent = Agent(buffer, actor_critic, policy_lr=3e-4, value_lr=1e-3,
               policy_train_iter=64, value_train_iter=64)
-trainer = PPOTrainer(max_steps=int(300e3), plot_steps=int(25e3))
+trainer = PPOTrainer(max_steps=int(3e6), plot_steps=int(25e3), eval_steps=int(50e3))
 
-trainer.train(env, agent, buffer, actor_critic, file="gan_ppo.py")
+trainer.train(env, train_env, test_env, agent, buffer, actor_critic, file="gan_ppo.py")

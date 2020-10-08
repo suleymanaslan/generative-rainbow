@@ -6,7 +6,7 @@ from utils import Trainer
 class RainbowTrainer(Trainer):
     def __init__(self, max_steps, replay_frequency, reward_clip, learning_start_step,
                  target_update, gan_steps, gan_scale_steps, eval_steps, plot_steps, training_mode):
-        super(RainbowTrainer, self).__init__(max_steps, plot_steps)
+        super(RainbowTrainer, self).__init__(max_steps, plot_steps, eval_steps)
         self.replay_frequency = replay_frequency
         self.reward_clip = reward_clip
         self.learning_start_step = learning_start_step
@@ -14,7 +14,6 @@ class RainbowTrainer(Trainer):
         self.training_mode = training_mode
         self.gan_steps = gan_steps
         self.gan_scale_steps = gan_scale_steps
-        self.eval_steps = eval_steps
 
     def train(self, env, train_env, test_env, agent, mem, file=None):
         self._init_training(file)
@@ -88,14 +87,3 @@ class RainbowTrainer(Trainer):
             eval_reward += ep_reward
         eval_reward /= num_levels
         return eval_reward
-
-    def eval(self, train_env, test_env, agent, steps):
-        train_reward = self._eval(train_env, test_env.num_levels * 2, agent)
-        self.train_ep_rewards.append(train_reward)
-        self.print_and_log(f"{datetime.now()}, train_reward:{train_reward:4.1f}")
-
-        test_reward = self._eval(test_env, test_env.num_levels * 2, agent)
-        self.test_ep_rewards.append(test_reward)
-        self.print_and_log(f"{datetime.now()}, test_reward:{test_reward:4.1f}")
-
-        self.eval_ep_steps.append(steps)
