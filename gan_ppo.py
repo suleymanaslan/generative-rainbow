@@ -25,3 +25,4 @@ agent = Agent(buffer, actor_critic, policy_lr=3e-4, value_lr=1e-3,
 trainer = PPOTrainer(max_steps=int(3e6), plot_steps=int(25e3), eval_steps=int(50e3))
 
 trainer.train(env, train_env, test_env, agent, buffer, actor_critic, file="gan_ppo.py")
+trainer.save(agent)

@@ -11,7 +11,8 @@ import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
 from rainbow.layers import mixed_pool2d
 
-from rainbow.network import Encoder, DQN, FullDQN, BranchedDQN, FullGenerator, GeneratorDQN, BranchedGeneratorDQN, Discriminator
+from rainbow.network import Encoder, DQN, FullDQN, BranchedDQN, FullGenerator, GeneratorDQN, BranchedGeneratorDQN, \
+    Discriminator
 from rainbow.network_utils import WGANGP, finite_check, wgangp_gradient_penalty
 
 
@@ -139,13 +140,12 @@ class Agent:
         if self.env.view_mode == "rgb":
             real_state = (self.real_state.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
             real_next_state = (self.real_next_state.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
-            generated_state = self.generated_state.permute(1, 2, 0).numpy()
+            generated_state = (self.generated_state.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
         else:
             real_state = (self.real_state.numpy() * 255).astype(np.uint8)
             real_next_state = (self.real_next_state.numpy() * 255).astype(np.uint8)
-            generated_state = self.generated_state.numpy()
-        generated_state = ((generated_state - generated_state.min()) / (
-                generated_state.max() - generated_state.min()) * 255).astype(np.uint8)
+            generated_state = (self.generated_state.numpy() * 255).astype(np.uint8)
+
         pgan_img = np.concatenate((real_state, real_next_state, generated_state), axis=1)
         imageio.imwrite(f"{save_dir}/{int(time.time())}.jpg", pgan_img)
 

@@ -152,9 +152,6 @@ class Generator(nn.Module):
         self.scale_layers[-1].append(
             EqualizedConv2d(depth_last_scale, depth_new_scale, 3, padding=1, equalized=self.equalized_lr,
                             init_bias_to_zero=self.init_bias_to_zero))
-        self.scale_layers[-1].append(
-            EqualizedConv2d(depth_new_scale, depth_new_scale, 3, padding=1, equalized=self.equalized_lr,
-                            init_bias_to_zero=self.init_bias_to_zero))
 
         self.to_rgb_layers.append(EqualizedConv2d(depth_new_scale, self.dim_output, 1, equalized=self.equalized_lr,
                                                   init_bias_to_zero=self.init_bias_to_zero))
@@ -327,9 +324,6 @@ class Discriminator(nn.Module):
         self.scales_depth.append(depth_new_scale)
 
         self.scale_layers.append(nn.ModuleList())
-        self.scale_layers[-1].append(
-            EqualizedConv2d(depth_new_scale, depth_new_scale, 3, padding=1, equalized=self.equalized_lr,
-                            init_bias_to_zero=self.init_bias_to_zero))
         self.scale_layers[-1].append(
             EqualizedConv2d(depth_new_scale, depth_last_scale, 3, padding=1, equalized=self.equalized_lr,
                             init_bias_to_zero=self.init_bias_to_zero))
