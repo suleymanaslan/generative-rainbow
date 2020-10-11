@@ -29,8 +29,11 @@ class Encoder(nn.Module):
         if self.residual_network:
             net = nn.Sequential(self.layer1, self.layer2, self.layer3)
         else:
-            net = nn.Sequential(nn.Conv2d(self.history_length, 64, 3, stride=2, padding=1), nn.ReLU(inplace=True),
+            net = nn.Sequential(nn.Conv2d(self.history_length, 64, 3, stride=1, padding=1), nn.ReLU(inplace=True),
                                 nn.Conv2d(64, 64, 3, stride=2, padding=1), nn.ReLU(inplace=True),
+                                nn.Conv2d(64, 64, 3, stride=1, padding=1), nn.ReLU(inplace=True),
+                                nn.Conv2d(64, 64, 3, stride=2, padding=1), nn.ReLU(inplace=True),
+                                nn.Conv2d(64, 64, 3, stride=1, padding=1), nn.ReLU(inplace=True),
                                 nn.Conv2d(64, 64, 3, stride=2, padding=1), nn.ReLU(inplace=True),
                                 )
         feat_size = 4096
