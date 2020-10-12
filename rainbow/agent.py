@@ -140,12 +140,13 @@ class Agent:
         if self.env.view_mode == "rgb":
             real_state = (self.real_state.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
             real_next_state = (self.real_next_state.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
-            generated_state = (self.generated_state.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
+            generated_state = self.generated_state.permute(1, 2, 0).numpy()
         else:
             real_state = (self.real_state.numpy() * 255).astype(np.uint8)
             real_next_state = (self.real_next_state.numpy() * 255).astype(np.uint8)
-            generated_state = (self.generated_state.numpy() * 255).astype(np.uint8)
-
+            generated_state = self.generated_state.numpy()
+        generated_state = ((generated_state - generated_state.min()) / (
+                    generated_state.max() - generated_state.min()) * 255).astype(np.uint8)
         pgan_img = np.concatenate((real_state, real_next_state, generated_state), axis=1)
         imageio.imwrite(f"{save_dir}/{int(time.time())}.jpg", pgan_img)
 
