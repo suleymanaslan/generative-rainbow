@@ -29,11 +29,11 @@ class Encoder(nn.Module):
         if self.residual_network:
             net = nn.Sequential(self.layer1, self.layer2, self.layer3)
         else:
-            net = nn.Sequential(nn.Conv2d(self.history_length, 64, 3, stride=2, padding=1), nn.ReLU(inplace=True),
-                                nn.Conv2d(64, 64, 3, stride=2, padding=1), nn.ReLU(inplace=True),
-                                nn.Conv2d(64, 64, 3, stride=2, padding=1), nn.ReLU(inplace=True),
+            net = nn.Sequential(nn.Conv2d(self.history_length, 128, 3, stride=2, padding=1), nn.ReLU(inplace=True),
+                                nn.Conv2d(128, 128, 3, stride=2, padding=1), nn.ReLU(inplace=True),
+                                nn.Conv2d(128, 128, 3, stride=2, padding=1), nn.ReLU(inplace=True),
                                 )
-        feat_size = 4096
+        feat_size = 8192
         return net, feat_size
 
     def forward(self, x):
@@ -43,8 +43,8 @@ class Encoder(nn.Module):
 class BranchedEncoder(Encoder):
     def __init__(self, history_length, residual_network):
         super(BranchedEncoder, self).__init__(history_length, residual_network)
-        self.dqn_conv = nn.Sequential(nn.Conv2d(64, 64, 1), nn.ReLU(inplace=True))
-        self.gan_conv = nn.Sequential(nn.Conv2d(64, 64, 1), nn.ReLU(inplace=True))
+        self.dqn_conv = nn.Sequential(nn.Conv2d(128, 128, 1), nn.ReLU(inplace=True))
+        self.gan_conv = nn.Sequential(nn.Conv2d(128, 128, 1), nn.ReLU(inplace=True))
 
     def forward(self, x):
         net_feat = self.net(x)
@@ -116,7 +116,7 @@ class Generator(nn.Module):
         self.feat_size = feat_size
         self.action_size = action_size
         self.dim_output = dim_output
-        self.depth_scale0 = 64
+        self.depth_scale0 = 128
         self.equalized_lr = True
         self.init_bias_to_zero = True
         self.dim_latent = self.feat_size + self.action_size
@@ -285,7 +285,7 @@ class Discriminator(nn.Module):
     def __init__(self, action_size, dim_input=1):
         super(Discriminator, self).__init__()
         self.action_size = action_size
-        self.depth_scale0 = 64
+        self.depth_scale0 = 128
         self.equalized_lr = True
         self.init_bias_to_zero = True
         self.dim_input = dim_input
