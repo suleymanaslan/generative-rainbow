@@ -414,8 +414,8 @@ class Agent:
         if self.gan_steps >= self.steps_per_scale:
             self.gan_steps = 0
             if self.scale < self.max_scale:
-                self.discrm_net.add_scale(depth_new_scale=128)
-                generator_net.add_scale(depth_new_scale=128)
+                self.discrm_net.add_scale(depth_new_scale=64)
+                generator_net.add_scale(depth_new_scale=64)
 
                 self.discrm_net.to(self.device)
                 generator_net.to(self.device)
