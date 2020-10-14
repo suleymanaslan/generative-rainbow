@@ -31,9 +31,10 @@ class Encoder(nn.Module):
         else:
             net = nn.Sequential(nn.Conv2d(self.history_length, 128, 3, stride=2, padding=1), nn.ReLU(inplace=True),
                                 nn.Conv2d(128, 128, 3, stride=2, padding=1), nn.ReLU(inplace=True),
-                                nn.Conv2d(128, 128, 3, stride=2, padding=1), nn.ReLU(inplace=True),
+                                nn.Conv2d(128, 256, 3, stride=2, padding=1), nn.ReLU(inplace=True),
+                                nn.Conv2d(256, 256, 3, stride=2, padding=1), nn.ReLU(inplace=True),
                                 )
-        feat_size = 8192
+        feat_size = 4096
         return net, feat_size
 
     def forward(self, x):
@@ -43,14 +44,10 @@ class Encoder(nn.Module):
 class BranchedEncoder(Encoder):
     def __init__(self, history_length, residual_network):
         super(BranchedEncoder, self).__init__(history_length, residual_network)
-        self.dqn_conv = nn.Sequential(nn.Conv2d(128, 128, 1), nn.ReLU(inplace=True))
-        self.gan_conv = nn.Sequential(nn.Conv2d(128, 128, 1), nn.ReLU(inplace=True))
 
     def forward(self, x):
         net_feat = self.net(x)
-        dqn_feat = self.dqn_conv(net_feat).view(-1, self.feat_size)
-        gan_feat = self.gan_conv(net_feat).view(-1, self.feat_size)
-        return dqn_feat, gan_feat
+        return net_feat.view(-1, self.feat_size)
 
 
 class DQN(nn.Module):
@@ -106,9 +103,10 @@ class BranchedDQN(nn.Module):
         self.dqn.reset_noise()
 
     def forward(self, x, use_log_softmax=False):
-        dqn_feat, _ = self.encoder(x)
+        dqn_feat = self.encoder(x)
         q = self.dqn(dqn_feat, use_log_softmax)
         return q
+
 
 class Generator(nn.Module):
     def __init__(self, feat_size, action_size, dim_output=1):
@@ -119,7 +117,7 @@ class Generator(nn.Module):
         self.depth_scale0 = 128
         self.equalized_lr = True
         self.init_bias_to_zero = True
-        self.dim_latent = self.feat_size + self.action_size
+        self.dim_latent = 4096
         self.scales_depth = [self.depth_scale0]
 
         self.scale_layers = nn.ModuleList()
@@ -127,6 +125,10 @@ class Generator(nn.Module):
         self.to_rgb_layers = nn.ModuleList()
         self.to_rgb_layers.append(EqualizedConv2d(self.depth_scale0, self.dim_output, 1, equalized=self.equalized_lr,
                                                   init_bias_to_zero=self.init_bias_to_zero))
+
+        self.to_latent = nn.Sequential(nn.Linear(self.feat_size + self.action_size, self.dim_latent),
+                                       nn.ReLU(inplace=True),
+                                       )
 
         self.format_layer = EqualizedLinear(self.dim_latent, 16 * self.scales_depth[0], equalized=self.equalized_lr,
                                             init_bias_to_zero=self.init_bias_to_zero)
@@ -160,9 +162,9 @@ class Generator(nn.Module):
         self.alpha = alpha
 
     def forward(self, x, actions):
+        x = self.to_latent(torch.cat((x, actions), dim=1))
+
         x = self.normalization_layer(x)
-        x = flatten(x)
-        x = torch.cat((x, actions), dim=1)
         x = self.leaky_relu(self.format_layer(x))
         x = x.view(x.size()[0], -1, 4, 4)
         x = self.normalization_layer(x)
@@ -265,18 +267,18 @@ class BranchedGeneratorDQN(nn.Module):
         self.dqn.reset_noise()
 
     def forward(self, x, skip_gan=False, skip_dqn=False, actions=None, use_log_softmax=False):
-        dqn_feat, gan_feat = self.encoder(x)
+        net_feat = self.encoder(x)
 
         if skip_dqn:
             q = None
         else:
-            q = self.dqn(dqn_feat, use_log_softmax)
+            q = self.dqn(net_feat, use_log_softmax)
 
         if skip_gan:
             generated = None
         else:
             assert actions is not None
-            generated = self.generator(gan_feat, actions)
+            generated = self.generator(net_feat, actions)
 
         return q, generated
 
