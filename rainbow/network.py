@@ -29,10 +29,14 @@ class Encoder(nn.Module):
         if self.residual_network:
             net = nn.Sequential(self.layer1, self.layer2, self.layer3)
         else:
-            net = nn.Sequential(nn.Conv2d(self.history_length, 128, 3, stride=2, padding=1), nn.ReLU(inplace=True),
-                                nn.Conv2d(128, 128, 3, stride=2, padding=1), nn.ReLU(inplace=True),
-                                nn.Conv2d(128, 256, 3, stride=2, padding=1), nn.ReLU(inplace=True),
-                                nn.Conv2d(256, 256, 3, stride=2, padding=1), nn.ReLU(inplace=True),
+            net = nn.Sequential(nn.Conv2d(self.history_length, 128, 3, stride=1, padding=1),
+                                nn.ReLU(inplace=True), nn.AvgPool2d(2),
+                                nn.Conv2d(128, 128, 3, stride=1, padding=1),
+                                nn.ReLU(inplace=True), nn.AvgPool2d(2),
+                                nn.Conv2d(128, 256, 3, stride=1, padding=1),
+                                nn.ReLU(inplace=True), nn.AvgPool2d(2),
+                                nn.Conv2d(256, 256, 3, stride=1, padding=1),
+                                nn.ReLU(inplace=True), nn.AvgPool2d(2),
                                 )
         feat_size = 4096
         return net, feat_size
@@ -59,9 +63,9 @@ class DQN(nn.Module):
         self.action_size = action_size
 
         self.fc_h_v = NoisyLinear(self.feat_size, self.hidden_size, std_init=noisy_std)
-        self.fc_h_a = NoisyLinear(self.feat_size, self.hidden_size, std_init=noisy_std)
+        self.fc_h_a = NoisyLinear(self.feat_size, self.hidden_size * 4, std_init=noisy_std)
         self.fc_z_v = NoisyLinear(self.hidden_size, self.atoms, std_init=noisy_std)
-        self.fc_z_a = NoisyLinear(self.hidden_size, self.action_size * self.atoms, std_init=noisy_std)
+        self.fc_z_a = NoisyLinear(self.hidden_size * 4, self.action_size * self.atoms, std_init=noisy_std)
 
     def reset_noise(self):
         self.fc_h_v.reset_noise()
