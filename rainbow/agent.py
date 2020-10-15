@@ -5,6 +5,7 @@ from datetime import datetime
 
 import torch
 import imageio
+import cv2 as cv
 import numpy as np
 import torch.optim as optim
 import torch.nn.functional as F
@@ -140,13 +141,18 @@ class Agent:
         if self.env.view_mode == "rgb":
             real_state = (self.real_state.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
             real_next_state = (self.real_next_state.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
-            generated_state = self.generated_state.permute(1, 2, 0).numpy()
+            generated_state = (self.generated_state.permute(1, 2, 0).numpy().clip(0, 1) * 255).astype(np.uint8)
         else:
             real_state = (self.real_state.numpy() * 255).astype(np.uint8)
             real_next_state = (self.real_next_state.numpy() * 255).astype(np.uint8)
-            generated_state = self.generated_state.numpy()
-        generated_state = ((generated_state - generated_state.min()) / (
-                    generated_state.max() - generated_state.min()) * 255).astype(np.uint8)
+            generated_state = (self.generated_state.numpy().clip(0, 1) * 255).astype(np.uint8)
+
+        resize = False
+        if resize:
+            real_state = cv.resize(real_state, dsize=(512, 512), interpolation=cv.INTER_NEAREST)
+            real_next_state = cv.resize(real_next_state, dsize=(512, 512), interpolation=cv.INTER_NEAREST)
+            generated_state = cv.resize(generated_state, dsize=(512, 512), interpolation=cv.INTER_NEAREST)
+
         pgan_img = np.concatenate((real_state, real_next_state, generated_state), axis=1)
         imageio.imwrite(f"{save_dir}/{int(time.time())}.jpg", pgan_img)
 
