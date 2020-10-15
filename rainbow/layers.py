@@ -30,6 +30,18 @@ def mixed_pool2d(x, kernel_size=2, max_alpha=0.5):
     return F.max_pool2d(x, kernel_size) * max_alpha + F.avg_pool2d(x, kernel_size) * (1 - max_alpha)
 
 
+class MixedPool2d(nn.Module):
+    def __init__(self, kernel_size, alpha=0.5):
+        super(MixedPool2d, self).__init__()
+        self.kernel_size = kernel_size
+        self.alpha = alpha
+        self.avg_pool = nn.AvgPool2d(kernel_size)
+        self.max_pool = nn.MaxPool2d(kernel_size)
+
+    def forward(self, x):
+        return self.max_pool(x) * self.alpha + self.avg_pool(x) * (1 - self.alpha)
+
+
 class ConstrainedLayer(nn.Module):
     def __init__(self, module, equalized=True, lr_mul=1.0, init_bias_to_zero=True):
         super(ConstrainedLayer, self).__init__()
