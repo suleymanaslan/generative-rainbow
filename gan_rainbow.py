@@ -22,7 +22,7 @@ agent = Agent(env, atoms=51, v_min=-20.0, v_max=20.0, batch_size=64, multi_step=
               noisy_std=0.1, gan_lr_mult=1e-1, training_mode="branch")
 mem = ReplayMemory(int(50e3), env, agent.discount, agent.n,
                    priority_weight=0.4, priority_exponent=0.5)
-trainer = RainbowTrainer(max_steps=int(3e6), replay_frequency=16, reward_clip=5.0,
+trainer = RainbowTrainer(max_steps=int(6e6), replay_frequency=16, reward_clip=5.0,
                          learning_start_step=int(5e3), target_update=int(2e3),
                          gan_steps=int(400e3), gan_scale_steps=int(400e3),
                          eval_steps=int(50e3), plot_steps=int(25e3), training_mode=agent.training_mode)
