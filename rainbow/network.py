@@ -15,33 +15,28 @@ class Encoder(nn.Module):
         self.residual_network = residual_network
 
         if self.residual_network:
-            self.layer1 = BasicBlock(self.history_length, 128)
-            self.layer2 = BasicBlock(128, 128)
-            self.layer3 = BasicBlock(128, 256)
-            self.layer4 = BasicBlock(256, 256)
+            self.layer1 = BasicBlock(self.history_length, 64, 2)
+            self.layer2 = BasicBlock(64, 64, 2)
+            self.layer3 = BasicBlock(64, 64, 2)
 
         self.net, self.feat_size = self._get_net()
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='leaky_relu')
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
 
     def _get_net(self):
         if self.residual_network:
-            net = nn.Sequential(self.layer1, nn.AvgPool2d(2),
-                                self.layer2, nn.AvgPool2d(2),
-                                self.layer3, nn.AvgPool2d(2),
-                                self.layer4, nn.AvgPool2d(2),
-                                )
+            net = nn.Sequential(self.layer1, self.layer2, self.layer3)
         else:
             net = nn.Sequential(nn.Conv2d(self.history_length, 128, 3, stride=1, padding=1),
-                                nn.LeakyReLU(0.2, inplace=True), nn.AvgPool2d(2),
+                                nn.ReLU(inplace=True), nn.AvgPool2d(2),
                                 nn.Conv2d(128, 128, 3, stride=1, padding=1),
-                                nn.LeakyReLU(0.2, inplace=True), nn.AvgPool2d(2),
+                                nn.ReLU(inplace=True), nn.AvgPool2d(2),
                                 nn.Conv2d(128, 256, 3, stride=1, padding=1),
-                                nn.LeakyReLU(0.2, inplace=True), nn.AvgPool2d(2),
+                                nn.ReLU(inplace=True), nn.AvgPool2d(2),
                                 nn.Conv2d(256, 256, 3, stride=1, padding=1),
-                                nn.LeakyReLU(0.2, inplace=True), nn.AvgPool2d(2),
+                                nn.ReLU(inplace=True), nn.AvgPool2d(2),
                                 )
         feat_size = 4096
         return net, feat_size
