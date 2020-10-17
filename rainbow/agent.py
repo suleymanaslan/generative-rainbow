@@ -19,7 +19,7 @@ from rainbow.network_utils import WGANGP, finite_check, wgangp_gradient_penalty
 
 class Agent:
     def __init__(self, env, atoms, v_min, v_max, batch_size, multi_step, discount,
-                 norm_clip, lr, adam_eps, hidden_size, noisy_std, gan_alpha, training_mode="joint", load_file=None):
+                 norm_clip, lr, adam_eps, hidden_size, noisy_std, gan_lr_mult, training_mode="joint", load_file=None):
         self.device = torch.device("cuda:0")
         self.env = env
         self.in_channels = self.env.window * 3 if self.env.view_mode == "rgb" else self.env.window
@@ -37,7 +37,7 @@ class Agent:
         self.noisy_std = noisy_std
         self.lr = lr
         self.adam_eps = adam_eps
-        self.gan_alpha = gan_alpha
+        self.gan_lr_mult = gan_lr_mult
 
         self.training_mode = training_mode
         assert self.training_mode in ["joint", "separate", "gan_feat", "branch", "dqn_only", "gan_only"]
@@ -260,11 +260,11 @@ class Agent:
 
         log_ps, pgan_states, pgan_next_states, pred_fake_g, loss_dict = self._gan_loss(states, actions, next_states)
 
-        all_loss_o = loss_dict["g_fake"] * self.gan_alpha
+        all_loss_o = loss_dict["g_fake"] * self.gan_lr_mult
 
         loss = self._dqn_loss(log_ps, states, actions, returns, next_states, nonterminals)
 
-        all_loss_o += (weights * loss).mean() * (1 - self.gan_alpha)
+        all_loss_o += (weights * loss).mean()
         all_loss_o.backward(retain_graph=True)
         finite_check(self.online_net.parameters())
         self._dqn_check(trainer, mem, idxs, loss, weights)
@@ -274,7 +274,7 @@ class Agent:
         idxs, states, actions, returns, next_states, nonterminals, weights = self._get_sample(mem)
 
         _, pgan_states, pgan_next_states, pred_fake_g, loss_dict = self._gan_loss(states, actions, next_states,
-                                                                                  gan_alpha=1, gan_feat=True)
+                                                                                  gan_lr_mult=1, gan_feat=True)
 
         loss_dict["g_fake"].backward(retain_graph=True)
         finite_check(self.generator_net.parameters())
@@ -293,9 +293,9 @@ class Agent:
     def learn_branch(self, mem, trainer):
         self.learn_joint(mem, trainer)
 
-    def _gan_loss(self, states, actions, next_states, gan_alpha=None, gan_feat=False):
-        if gan_alpha is None:
-            gan_alpha = self.gan_alpha
+    def _gan_loss(self, states, actions, next_states, gan_lr_mult=None, gan_feat=False):
+        if gan_lr_mult is None:
+            gan_lr_mult = self.gan_lr_mult
 
         if gan_feat:
             generator_net = self.generator_net
@@ -373,12 +373,12 @@ class Agent:
 
         loss_d_grad = wgangp_gradient_penalty(real_input, fake_input, actions_one_hot, self.discrm_net, weight=10.0,
                                               backward=False)
-        (loss_d_grad * gan_alpha).backward(retain_graph=True)
+        (loss_d_grad * gan_lr_mult).backward(retain_graph=True)
 
         loss_epsilon = (pred_real_d[:, 0] ** 2).sum() * self.epsilon_d
         all_loss_d += loss_epsilon
 
-        (all_loss_d * gan_alpha).backward(retain_graph=True)
+        (all_loss_d * gan_lr_mult).backward(retain_graph=True)
         finite_check(self.discrm_net.parameters())
         self.optimizer_d.step()
 
@@ -438,7 +438,7 @@ class Agent:
             idxs, states, actions, returns, next_states, nonterminals, weights = self._get_sample(mem)
 
             log_ps, pgan_states, pgan_next_states, pred_fake_g, loss_dict = self._gan_loss(states, actions, next_states,
-                                                                                           gan_alpha=1)
+                                                                                           gan_lr_mult=1)
 
             loss_dict["g_fake"].backward(retain_graph=True)
             finite_check(self.online_net.parameters())
