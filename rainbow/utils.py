@@ -15,7 +15,7 @@ class RainbowTrainer(Trainer):
         self.gan_steps = gan_steps
         self.gan_scale_steps = gan_scale_steps
 
-    def train(self, env, train_env, test_env, agent, mem, file=None):
+    def train(self, env, train_env, test_env, agent, mem, mem_generated, file=None):
         self._init_training(file)
         priority_weight_increase = (1 - mem.priority_weight) / (self.max_steps - self.learning_start_step)
         finished = False
@@ -46,8 +46,11 @@ class RainbowTrainer(Trainer):
                 if self.reward_clip > 0:
                     reward = max(min(reward, self.reward_clip), -self.reward_clip) / self.reward_clip
                 mem.append(observation, action, reward, done)
+                if agent.scale == agent.max_scale:
+                    mem_generated.append(generated_observation, action, reward, done)
                 if steps >= self.learning_start_step:
                     mem.priority_weight = min(mem.priority_weight + priority_weight_increase, 1)
+                    mem_generated.priority_weight = mem.priority_weight
                     if self.training_mode == "joint":
                         if steps % self.replay_frequency == 0:
                             agent.learn_joint(mem, self)
@@ -65,7 +68,11 @@ class RainbowTrainer(Trainer):
                             agent.learn(mem, self)
                     elif self.training_mode == "branch":
                         if steps % self.replay_frequency == 0:
-                            agent.learn_branch(mem, self)
+                            if steps >= self.learning_start_step + \
+                                    agent.steps_per_scale * self.replay_frequency * agent.max_scale:
+                                agent.learn_branch_generated(mem, mem_generated, self)
+                            else:
+                                agent.learn_branch(mem, self)
                     elif self.training_mode == "gan_only":
                         agent.learn_gan(mem, self, repeat=1)
                     else:

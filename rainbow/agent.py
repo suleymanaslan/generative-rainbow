@@ -275,6 +275,25 @@ class Agent:
         self._dqn_check(trainer, mem, idxs, loss, weights)
         self._gan_check(trainer, pgan_states, pgan_next_states, pred_fake_g, loss_dict)
 
+    def learn_joint_generated(self, mem, mem_generated, trainer):
+        _, states, actions, _, next_states, _, _ = self._get_sample(mem)
+
+        _, pgan_states, pgan_next_states, pred_fake_g, loss_dict = self._gan_loss(states, actions, next_states)
+
+        all_loss_o = loss_dict["g_fake"] * self.gan_lr_mult
+
+        g_idxs, g_states, g_actions, g_returns, g_next_states, g_nonterminals, g_weights = self._get_sample(
+            mem_generated)
+        log_ps = self.online_net(self.target_g_net(g_states), use_log_softmax=True)
+
+        loss = self._dqn_loss(log_ps, g_states, g_actions, g_returns, g_next_states, g_nonterminals)
+
+        all_loss_o += (g_weights * loss).mean()
+        all_loss_o.backward(retain_graph=True)
+        finite_check(self.online_net.parameters())
+        self._dqn_check(trainer, mem_generated, g_idxs, loss, g_weights)
+        self._gan_check(trainer, pgan_states, pgan_next_states, pred_fake_g, loss_dict)
+
     def learn_gan_feat(self, mem, trainer):
         idxs, states, actions, returns, next_states, nonterminals, weights = self._get_sample(mem)
 
@@ -297,6 +316,9 @@ class Agent:
 
     def learn_branch(self, mem, trainer):
         self.learn_joint(mem, trainer)
+
+    def learn_branch_generated(self, mem, mem_generated, trainer):
+        self.learn_joint_generated(mem, mem_generated, trainer)
 
     def _gan_loss(self, states, actions, next_states, gan_lr_mult=None, gan_feat=False):
         if gan_lr_mult is None:
