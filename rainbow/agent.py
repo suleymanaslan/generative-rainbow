@@ -131,6 +131,14 @@ class Agent:
         if self.training_mode == "gan_feat":
             self.generator_net.load_state_dict(torch.load(f"{load_dir}/generator_net.pth"))
             self.target_g_net.load_state_dict(torch.load(f"{load_dir}/target_g_net.pth"))
+        for _ in range(4):
+            self.online_net.add_scale(128)
+            self.discrm_net.add_scale(128)
+        self.online_net.to(self.device)
+        self.discrm_net.to(self.device)
+        self._init_optimizers()
+        self.scale = 4
+        self.model_alpha = 1.0
         self.online_net.load_state_dict(torch.load(f"{load_dir}/online_net.pth"))
         self.target_net.load_state_dict(torch.load(f"{load_dir}/target_net.pth"))
         self.discrm_net.load_state_dict(torch.load(f"{load_dir}/discrm_net.pth"))
