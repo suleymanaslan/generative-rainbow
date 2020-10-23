@@ -118,6 +118,7 @@ class StarPilotEnv(Env):
         self.distribution_mode = distribution_mode
         self.use_backgrounds = use_backgrounds
         super(StarPilotEnv, self).__init__(history_length, action_size, view_mode)
+        self.generated_buffer = deque([], maxlen=self.window)
 
     def _get_env(self):
         return gym.make("procgen:procgen-starpilot-v0", num_levels=self.num_levels, start_level=self.start_level,
@@ -128,6 +129,15 @@ class StarPilotEnv(Env):
             torch.zeros(64, 64, device=self.device)
         for _ in range(self.window):
             self.state_buffer.append(blank_obs)
+            self.generated_buffer.append(blank_obs)
+
+    def reset(self):
+        self._reset_buffer()
+        observation = self.wrapped_env.reset()
+        observation = self._process_observation(observation)
+        self.state_buffer.append(observation)
+        self.generated_buffer.append(observation)
+        return torch.stack(list(self.state_buffer), 0)
 
     def _process_observation(self, observation):
         if self.view_mode == "gray":
@@ -145,7 +155,13 @@ class StarPilotEnv(Env):
         display.display(Image.fromarray(render_img))
         time.sleep(1 / 60)
 
-    def step(self, action):
+    def step(self, action, generated_observation=None):
         observation, reward, done, info = self.wrapped_env.step(action)
-        self.state_buffer.append(self._process_observation(observation))
+        observation = self._process_observation(observation)
+        self.state_buffer.append(observation)
+        if generated_observation is not None:
+            alpha = np.random.rand()
+            generated_observation = observation * alpha + generated_observation * (1 - alpha)
+            self.generated_buffer.append(generated_observation)
+            info["generated_observation"] = torch.stack(list(self.generated_buffer), 0)
         return torch.stack(list(self.state_buffer), 0), reward, done, info

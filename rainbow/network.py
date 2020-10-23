@@ -270,7 +270,7 @@ class BranchedGeneratorDQN(nn.Module):
     def reset_noise(self):
         self.dqn.reset_noise()
 
-    def forward(self, x, skip_gan=False, skip_dqn=False, actions=None, use_log_softmax=False):
+    def forward(self, x, skip_gan=False, skip_dqn=False, actions=None, use_log_softmax=False, agent=None):
         net_feat = self.encoder(x)
 
         if skip_dqn:
@@ -281,7 +281,10 @@ class BranchedGeneratorDQN(nn.Module):
         if skip_gan:
             generated = None
         else:
-            assert actions is not None
+            if actions is None:
+                assert agent is not None
+                actions = (q * agent.support).sum(2).argmax(1)
+                actions = torch.eye(agent.action_size)[actions].to(agent.device)
             generated = self.generator(net_feat, actions)
 
         return q, generated

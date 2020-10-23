@@ -167,18 +167,23 @@ class Agent:
     def reset_noise(self):
         self.online_net.reset_noise()
 
-    def _act(self, state):
+    def _act(self, state, get_generated=False):
         with torch.no_grad():
             if self.training_mode == "gan_feat":
                 q = self.online_net(self.generator_net(state.unsqueeze(0), skip_gan=True))
             else:
-                q, _ = self.online_net(state.unsqueeze(0), skip_gan=True)
+                if get_generated:
+                    q, generated = self.online_net(state.unsqueeze(0), skip_gan=False, agent=self)
+                    generated = generated.detach().squeeze(0).clamp(0.0, 1.0)
+                    return (q * self.support).sum(2).argmax(1).item(), generated
+                else:
+                    q, _ = self.online_net(state.unsqueeze(0), skip_gan=True)
             return (q * self.support).sum(2).argmax(1).item()
 
-    def act(self, state):
+    def act(self, state, get_generated=False):
         if self.env.view_mode == "rgb":
             state = state.view(-1, 64, 64)
-        return self._act(state)
+        return self._act(state, get_generated)
 
     def act_e_greedy(self, state, epsilon=0.001):
         action, features = self.act(state)
