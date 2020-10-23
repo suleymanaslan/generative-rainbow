@@ -284,7 +284,7 @@ class Agent:
 
         g_idxs, g_states, g_actions, g_returns, g_next_states, g_nonterminals, g_weights = self._get_sample(
             mem_generated)
-        log_ps = self.online_net(self.target_g_net(g_states), use_log_softmax=True)
+        log_ps, _ = self.online_net(g_states, skip_gan=True, use_log_softmax=True)
 
         loss = self._dqn_loss(log_ps, g_states, g_actions, g_returns, g_next_states, g_nonterminals)
 
