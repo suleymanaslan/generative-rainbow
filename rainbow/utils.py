@@ -21,6 +21,7 @@ class RainbowTrainer(Trainer):
         finished = False
         episode = 0
         steps = 0
+        generated_next_observation = None
         while not finished:
             observation, ep_reward, done = env.reset(), 0, False
             generated_observation = observation
@@ -32,6 +33,7 @@ class RainbowTrainer(Trainer):
                 else:
                     action = agent.act(observation)
                     next_observation, reward, done, info = env.step(action)
+                    generated_observation = next_observation
                 ep_reward += reward
                 steps += 1
                 if steps % self.eval_steps == 0:
@@ -80,7 +82,7 @@ class RainbowTrainer(Trainer):
                     if steps % self.target_update == 0:
                         agent.update_target_net()
                 observation = next_observation
-                if agent.scale == agent.max_scale:
+                if generated_next_observation is not None:
                     generated_observation = generated_next_observation
             episode += 1
             self.ep_rewards.append(ep_reward)
