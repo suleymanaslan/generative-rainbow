@@ -70,7 +70,7 @@ class RainbowTrainer(Trainer):
                             agent.learn(mem, self)
                     elif self.training_mode == "branch":
                         if steps % self.replay_frequency == 0:
-                            if steps >= self.learning_start_step + \
+                            if steps >= self.learning_start_step * 2 + \
                                     agent.steps_per_scale * self.replay_frequency * agent.max_scale:
                                 agent.learn_branch_generated(mem, mem_generated, self)
                             else:
