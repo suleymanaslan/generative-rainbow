@@ -5,7 +5,7 @@ from utils import Trainer
 
 class RainbowTrainer(Trainer):
     def __init__(self, max_steps, replay_frequency, reward_clip, learning_start_step,
-                 target_update, gan_steps, gan_scale_steps, eval_steps, plot_steps, training_mode):
+                 target_update, gan_steps, gan_scale_steps, eval_steps, plot_steps, training_mode, use_generated=False):
         super(RainbowTrainer, self).__init__(max_steps, plot_steps, eval_steps)
         self.replay_frequency = replay_frequency
         self.reward_clip = reward_clip
@@ -14,6 +14,7 @@ class RainbowTrainer(Trainer):
         self.training_mode = training_mode
         self.gan_steps = gan_steps
         self.gan_scale_steps = gan_scale_steps
+        self.use_generated = use_generated
 
     def train(self, env, train_env, test_env, agent, mem, mem_generated, file=None):
         self._init_training(file)
@@ -26,7 +27,7 @@ class RainbowTrainer(Trainer):
             observation, ep_reward, done = env.reset(), 0, False
             generated_observation = observation
             while not done:
-                if agent.scale == agent.max_scale:
+                if agent.scale == agent.max_scale and self.use_generated:
                     action, generated_next_observation = agent.act(observation, get_generated=True)
                     next_observation, reward, done, info = env.step(action, generated_next_observation)
                     generated_next_observation = info["generated_observation"]
@@ -48,7 +49,7 @@ class RainbowTrainer(Trainer):
                 if self.reward_clip > 0:
                     reward = max(min(reward, self.reward_clip), -self.reward_clip) / self.reward_clip
                 mem.append(observation, action, reward, done)
-                if agent.scale == agent.max_scale:
+                if agent.scale == agent.max_scale and self.use_generated:
                     mem_generated.append(generated_observation, action, reward, done)
                 if steps >= self.learning_start_step:
                     mem.priority_weight = min(mem.priority_weight + priority_weight_increase, 1)
@@ -68,9 +69,12 @@ class RainbowTrainer(Trainer):
                     elif self.training_mode == "dqn_only":
                         if steps % self.replay_frequency == 0:
                             agent.learn(mem, self)
+                    elif self.training_mode == "branch_dqn":
+                        if steps % self.replay_frequency == 0:
+                            agent.learn_branch_dqn(mem, self)
                     elif self.training_mode == "branch":
                         if steps % self.replay_frequency == 0:
-                            if steps >= self.learning_start_step * 2 + \
+                            if self.use_generated and steps >= self.learning_start_step * 2 + \
                                     agent.steps_per_scale * self.replay_frequency * agent.max_scale:
                                 agent.learn_branch_generated(mem, mem_generated, self)
                             else:

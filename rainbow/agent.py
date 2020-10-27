@@ -40,7 +40,7 @@ class Agent:
         self.gan_lr_mult = gan_lr_mult
 
         self.training_mode = training_mode
-        assert self.training_mode in ["joint", "separate", "gan_feat", "branch", "dqn_only", "gan_only"]
+        assert self.training_mode in ["joint", "separate", "gan_feat", "branch", "branch_dqn", "dqn_only", "gan_only"]
         self._init_nets()
         self._init_optimizers()
 
@@ -78,7 +78,7 @@ class Agent:
             self.discrm_net = Discriminator(self.action_size, dim_input=img_dim).to(self.device)
             for param in self.target_g_net.parameters():
                 param.requires_grad = False
-        elif self.training_mode == "branch":
+        elif self.training_mode == "branch" or self.training_mode == "branch_dqn":
             self.online_net = BranchedGeneratorDQN(self.in_channels, self.hidden_size, self.atoms, self.action_size,
                                                    self.noisy_std, dim_output=img_dim,
                                                    residual_network=False).to(self.device)
@@ -324,6 +324,9 @@ class Agent:
 
     def learn_branch(self, mem, trainer):
         self.learn_joint(mem, trainer)
+
+    def learn_branch_dqn(self, mem, trainer):
+        self.learn(mem, trainer)
 
     def learn_branch_generated(self, mem, mem_generated, trainer):
         self.learn_joint_generated(mem, mem_generated, trainer)

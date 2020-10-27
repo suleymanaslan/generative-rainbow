@@ -8,7 +8,7 @@ import numpy as np
 torch.manual_seed(828)
 np.random.seed(828)
 
-env = StarPilotEnv(history_length=16, num_levels=1,
+env = StarPilotEnv(history_length=16, num_levels=10,
                    start_level=0, distribution_mode="easy",
                    use_backgrounds=False, view_mode="rgb")
 train_env = StarPilotEnv(history_length=env.window, num_levels=env.num_levels,
@@ -19,7 +19,7 @@ test_env = StarPilotEnv(history_length=env.window, num_levels=20,
                         use_backgrounds=env.use_backgrounds, view_mode=env.view_mode)
 agent = Agent(env, atoms=51, v_min=-20.0, v_max=20.0, batch_size=64, multi_step=3,
               discount=0.99, norm_clip=10.0, lr=5e-4, adam_eps=1.5e-4, hidden_size=512,
-              noisy_std=0.1, gan_lr_mult=1e-4, training_mode="branch")
+              noisy_std=0.1, gan_lr_mult=1e-4, training_mode="branch_dqn")
 mem = ReplayMemory(int(50e3), env, agent.discount, agent.n,
                    priority_weight=0.4, priority_exponent=0.5)
 mem_generated = ReplayMemory(int(50e3), env, agent.discount, agent.n,
