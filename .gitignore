@@ -130,3 +130,4 @@ obstacle-tower-env/
 pytorch_GAN_zoo/
 trained_models/
 trained_agent/
+results/
