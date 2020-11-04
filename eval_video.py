@@ -37,16 +37,18 @@ def create_video(env, filename, fps, seconds):
 
 torch.manual_seed(828)
 np.random.seed(828)
+use_backgrounds = True
 
 train_env = StarPilotEnv(history_length=16, num_levels=10,
                          start_level=0, distribution_mode="easy",
-                         use_backgrounds=False, view_mode="rgb")
+                         use_backgrounds=use_backgrounds, view_mode="rgb")
 test_env = StarPilotEnv(history_length=train_env.window, num_levels=20,
                         start_level=int(100e3), distribution_mode=train_env.distribution_mode,
                         use_backgrounds=train_env.use_backgrounds, view_mode=train_env.view_mode)
 agent = Agent(train_env, atoms=51, v_min=-20.0, v_max=20.0, batch_size=8, multi_step=3,
               discount=0.99, norm_clip=10.0, lr=5e-4, adam_eps=1.5e-4, hidden_size=512,
               noisy_std=0.1, gan_lr_mult=1e-4, training_mode="branch")
-agent.load("trained_agent")
-create_video(train_env, "trained_agent/train_envs", fps=60, seconds=30)
-create_video(test_env, "trained_agent/test_envs", fps=60, seconds=30)
+agent_folder = "trained_agent/background" if use_backgrounds else "trained_agent/base"
+agent.load(f"{agent_folder}")
+create_video(train_env, f"{agent_folder}/train_envs", fps=60, seconds=30)
+create_video(test_env, f"{agent_folder}/test_envs", fps=60, seconds=30)
