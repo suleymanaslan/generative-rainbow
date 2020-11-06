@@ -82,7 +82,7 @@ def main():
     ax1.legend(handles, labels, loc='upper left', ncol=2, prop={'size': 8})
     fig.tight_layout()
     plt.subplots_adjust(wspace=0.01)
-    plt.savefig("../results/alpha/gan_alpha.pdf")
+    plt.savefig("../results/gan_alpha.pdf")
 
 
 main()
