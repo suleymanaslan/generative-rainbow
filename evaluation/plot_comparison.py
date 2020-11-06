@@ -45,12 +45,14 @@ def main():
     ax.set_xlabel(r"Unique Training Environments")
     ax.plot(x_ixs_smooth, train_means_smooth, linewidth=2.5, color="maroon", label="Rainbow (train)")
     ax.plot(x_ixs_smooth, test_means_smooth, linewidth=2.5, color="lightcoral", label="Rainbow (test)")
-    ax.errorbar(x_ixs, train_means, train_stds, ls="none", ecolor="maroon", elinewidth=1.5, capsize=3, capthick=2)
-    ax.errorbar(x_ixs, test_means, test_stds, ls="none", ecolor="lightcoral", elinewidth=1.5, capsize=3, capthick=2)
+    ax.errorbar(x_ixs, train_means, train_stds, ls="none", ecolor="maroon",
+                alpha=0.5, elinewidth=1.5, capsize=2, capthick=1.5)
+    ax.errorbar(x_ixs, test_means, test_stds, ls="none", ecolor="lightcoral",
+                alpha=0.5, elinewidth=1.5, capsize=2, capthick=1.5)
     ax.fill_between(x_ixs_smooth, train_means_smooth - train_stds_smooth, train_means_smooth + train_stds_smooth,
-                    alpha=0.3, color="maroon")
+                    alpha=0.4, color="maroon")
     ax.fill_between(x_ixs_smooth, test_means_smooth - test_stds_smooth, test_means_smooth + test_stds_smooth,
-                    alpha=0.3, color="lightcoral")
+                    alpha=0.5, color="lightcoral")
 
     x_ixs, train_means, train_stds, test_means, test_stds = read_results("gan")
     x_ixs_smooth, arrays_smooth = smooth_results(x_ixs, [train_means, train_stds, test_means, test_stds])
@@ -58,12 +60,14 @@ def main():
 
     ax.plot(x_ixs_smooth, train_means_smooth, linewidth=2.5, color="indigo", label="Rainbow+GAN (train)")
     ax.plot(x_ixs_smooth, test_means_smooth, linewidth=2.5, color="mediumorchid", label="Rainbow+GAN (test)")
-    ax.errorbar(x_ixs, train_means, train_stds, ls="none", ecolor="indigo", elinewidth=1.5, capsize=3, capthick=2)
-    ax.errorbar(x_ixs, test_means, test_stds, ls="none", ecolor="mediumorchid", elinewidth=1.5, capsize=3, capthick=2)
+    ax.errorbar(x_ixs, train_means, train_stds, ls="none", ecolor="indigo",
+                alpha=0.5, elinewidth=1.5, capsize=2, capthick=1.5)
+    ax.errorbar(x_ixs, test_means, test_stds, ls="none", ecolor="mediumorchid",
+                alpha=0.5, elinewidth=1.5, capsize=2, capthick=1.5)
     ax.fill_between(x_ixs_smooth, train_means_smooth - train_stds_smooth, train_means_smooth + train_stds_smooth,
-                    alpha=0.3, color="indigo")
+                    alpha=0.4, color="indigo")
     ax.fill_between(x_ixs_smooth, test_means_smooth - test_stds_smooth, test_means_smooth + test_stds_smooth,
-                    alpha=0.3, color="mediumorchid")
+                    alpha=0.5, color="mediumorchid")
 
     handles, labels = ax.get_legend_handles_labels()
     ax.legend(handles, labels, loc='upper left', ncol=2, prop={'size': 8})
