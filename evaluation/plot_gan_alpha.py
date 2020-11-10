@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import make_interp_spline
 
 sns.set()
-EP_COUNT = 60
+EP_COUNT = 10
 
 
 def load_gan_rewards(mode):
@@ -54,10 +54,10 @@ def main():
     ax1.set_xscale("log")
     ax1.set_xlim(10 ** 0.1, 10 ** -5.1)
     ax1.set_ylim(0, 75)
-    ax1.set_ylabel("Episode Reward")
-    ax1.set_xlabel(r"$\eta_{GAN} (\times \eta_{DQN})$")
-    ax1.plot(x_vals_smooth, train_means_smooth, linewidth=2.5, color="indigo", label="Rainbow+GAN (train)")
-    ax1.plot(x_vals_smooth, test_means_smooth, linewidth=2.5, color="mediumorchid", label="Rainbow+GAN (test)")
+    ax1.set_ylabel("Return (Cumulative Episode Reward)")
+    ax1.set_xlabel(r"$\lambda_{GAN}$")
+    ax1.plot(x_vals_smooth, train_means_smooth, linewidth=2.5, color="indigo", label="Generative Rainbow (train)")
+    ax1.plot(x_vals_smooth, test_means_smooth, linewidth=2.5, color="mediumorchid", label="Generative Rainbow (test)")
     ax1.errorbar(x_vals, train_means, train_stds, ls="none", ecolor="indigo", elinewidth=1.5, capsize=3, capthick=2)
     ax1.errorbar(x_vals, test_means, test_stds, ls="none", ecolor="mediumorchid", elinewidth=1.5, capsize=3, capthick=2)
     ax1.fill_between(x_vals_smooth, train_means_smooth - train_stds_smooth, train_means_smooth + train_stds_smooth,
@@ -79,7 +79,7 @@ def main():
     ax2.spines['left'].set_visible(False)
 
     handles, labels = [(a + b) for a, b in zip(ax1.get_legend_handles_labels(), ax2.get_legend_handles_labels())]
-    ax1.legend(handles, labels, loc='upper left', ncol=2, prop={'size': 8})
+    ax1.legend(handles, labels, loc='upper left', ncol=2, prop={'size': 9})
     fig.tight_layout()
     plt.subplots_adjust(wspace=0.01)
     plt.savefig("../results/gan_alpha.pdf")
