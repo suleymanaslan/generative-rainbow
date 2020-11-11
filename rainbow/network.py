@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from rainbow.layers import flatten, upscale2d, EqualizedLinear, EqualizedConv2d, EqualizedConv3d, NormalizationLayer, \
     SqueezeLayer, NoisyLinear, BasicBlock
-from rainbow.network_utils import mini_batch_std_dev
+from rainbow.network_utils import mini_batch_std_dev, PerturbFeatures
 
 
 class Encoder(nn.Module):
@@ -150,6 +150,8 @@ class Generator(nn.Module):
 
         self.generation_activation = None
 
+        self.perturb_features = PerturbFeatures(mean=0.0, std=0.2)
+
     def add_scale(self, depth_new_scale):
         depth_last_scale = self.scales_depth[-1]
         self.scales_depth.append(depth_new_scale)
@@ -166,6 +168,9 @@ class Generator(nn.Module):
         self.alpha = alpha
 
     def forward(self, x, actions):
+        if self.perturb_features is not None:
+            x = self.perturb_features(x)
+
         x = self.to_latent(torch.cat((x, actions), dim=1))
 
         x = self.normalization_layer(x)
