@@ -5,8 +5,7 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import make_interp_spline
 
 sns.set()
-EP_COUNT = 60
-
+EP_COUNT = 40
 
 def load_rewards(method, mode):
     rewards = np.array([np.load(f"../results/ep/{method}/{folder}/{mode}_ep_rewards.npy")[-EP_COUNT:]
@@ -41,7 +40,7 @@ def main():
 
     ax.set_xticks(range(11))
     ax.set_ylim(0, 90)
-    ax.set_ylabel("Episode Reward")
+    ax.set_ylabel("Return (Cumulative Episode Reward)")
     ax.set_xlabel(r"Unique Training Environments")
     ax.plot(x_ixs_smooth, train_means_smooth, linewidth=2.5, color="maroon", label="Rainbow (train)")
     ax.plot(x_ixs_smooth, test_means_smooth, linewidth=2.5, color="lightcoral", label="Rainbow (test)")
@@ -58,8 +57,8 @@ def main():
     x_ixs_smooth, arrays_smooth = smooth_results(x_ixs, [train_means, train_stds, test_means, test_stds])
     train_means_smooth, train_stds_smooth, test_means_smooth, test_stds_smooth = arrays_smooth
 
-    ax.plot(x_ixs_smooth, train_means_smooth, linewidth=2.5, color="indigo", label="Rainbow+GAN (train)")
-    ax.plot(x_ixs_smooth, test_means_smooth, linewidth=2.5, color="mediumorchid", label="Rainbow+GAN (test)")
+    ax.plot(x_ixs_smooth, train_means_smooth, linewidth=2.5, color="indigo", label="Generative Rainbow (train)")
+    ax.plot(x_ixs_smooth, test_means_smooth, linewidth=2.5, color="mediumorchid", label="Generative Rainbow (test)")
     ax.errorbar(x_ixs, train_means, train_stds, ls="none", ecolor="indigo",
                 alpha=0.5, elinewidth=1.5, capsize=2, capthick=1.5)
     ax.errorbar(x_ixs, test_means, test_stds, ls="none", ecolor="mediumorchid",
@@ -70,7 +69,7 @@ def main():
                     alpha=0.5, color="mediumorchid")
 
     handles, labels = ax.get_legend_handles_labels()
-    ax.legend(handles, labels, loc='upper left', ncol=2, prop={'size': 8})
+    ax.legend(handles, labels, loc='upper left', ncol=2, prop={'size': 9})
     fig.tight_layout()
     plt.savefig('../results/comparison.pdf')
 
