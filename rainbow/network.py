@@ -131,7 +131,7 @@ class Generator(nn.Module):
                                                   init_bias_to_zero=self.init_bias_to_zero))
 
         self.to_latent = nn.Sequential(nn.Linear(self.feat_size + self.action_size, self.dim_latent),
-                                       nn.ReLU(inplace=True),
+                                       nn.Tanh(),
                                        )
 
         self.format_layer = EqualizedLinear(self.dim_latent, 16 * self.scales_depth[0], equalized=self.equalized_lr,
