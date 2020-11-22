@@ -91,7 +91,7 @@ class WGANGP:
 
 
 class PerturbFeatures:
-    def __init__(self, mean=0.0, std=0.2, device="cuda:0"):
+    def __init__(self, mean, std, device="cuda:0"):
         self.std = std
         self.mean = mean
         self.device = device

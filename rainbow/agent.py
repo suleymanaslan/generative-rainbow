@@ -18,8 +18,8 @@ from rainbow.network_utils import WGANGP, finite_check, wgangp_gradient_penalty
 
 
 class Agent:
-    def __init__(self, env, atoms, v_min, v_max, batch_size, multi_step, discount,
-                 norm_clip, lr, adam_eps, hidden_size, noisy_std, gan_lr_mult, training_mode="joint", load_file=None):
+    def __init__(self, env, atoms, v_min, v_max, batch_size, multi_step, discount, norm_clip, lr,
+                 adam_eps, hidden_size, noisy_std, gan_lr_mult, perturb_factor, training_mode="joint", load_file=None):
         self.device = torch.device("cuda:0")
         self.env = env
         self.in_channels = self.env.window * 3 if self.env.view_mode == "rgb" else self.env.window
@@ -38,6 +38,7 @@ class Agent:
         self.lr = lr
         self.adam_eps = adam_eps
         self.gan_lr_mult = gan_lr_mult
+        self.perturb_factor = perturb_factor
 
         self.training_mode = training_mode
         assert self.training_mode in ["joint", "separate", "gan_feat", "branch", "branch_dqn", "dqn_only", "gan_only"]
@@ -81,6 +82,7 @@ class Agent:
         elif self.training_mode == "branch" or self.training_mode == "branch_dqn":
             self.online_net = BranchedGeneratorDQN(self.in_channels, self.hidden_size, self.atoms, self.action_size,
                                                    self.noisy_std, dim_output=img_dim,
+                                                   perturb_factor=self.perturb_factor,
                                                    residual_network=False).to(self.device)
             self.target_net = BranchedDQN(self.in_channels, self.hidden_size, self.atoms, self.action_size,
                                           self.noisy_std, residual_network=False).to(self.device)

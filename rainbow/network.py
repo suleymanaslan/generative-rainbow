@@ -113,7 +113,7 @@ class BranchedDQN(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, feat_size, action_size, dim_output=1):
+    def __init__(self, feat_size, action_size, dim_output=1, perturb_factor=0.0):
         super(Generator, self).__init__()
         self.feat_size = feat_size
         self.action_size = action_size
@@ -150,7 +150,7 @@ class Generator(nn.Module):
 
         self.generation_activation = None
 
-        self.perturb_features = PerturbFeatures(mean=0.0, std=0.2)
+        self.perturb_features = PerturbFeatures(mean=0.0, std=perturb_factor)
 
     def add_scale(self, depth_new_scale):
         depth_last_scale = self.scales_depth[-1]
@@ -168,10 +168,10 @@ class Generator(nn.Module):
         self.alpha = alpha
 
     def forward(self, x, actions):
+        x = self.to_latent(torch.cat((x, actions), dim=1))
+
         if self.perturb_features is not None:
             x = self.perturb_features(x)
-
-        x = self.to_latent(torch.cat((x, actions), dim=1))
 
         x = self.normalization_layer(x)
         x = self.leaky_relu(self.format_layer(x))
@@ -259,12 +259,12 @@ class GeneratorDQN(nn.Module):
 
 
 class BranchedGeneratorDQN(nn.Module):
-    def __init__(self, history_length, hidden_size, atoms, action_size, noisy_std, dim_output=1,
+    def __init__(self, history_length, hidden_size, atoms, action_size, noisy_std, dim_output=1, perturb_factor=0.0,
                  residual_network=False):
         super(BranchedGeneratorDQN, self).__init__()
         self.encoder = BranchedEncoder(history_length, residual_network)
         self.dqn = DQN(self.encoder.feat_size, hidden_size, atoms, action_size, noisy_std)
-        self.generator = Generator(self.encoder.feat_size, action_size, dim_output)
+        self.generator = Generator(self.encoder.feat_size, action_size, dim_output, perturb_factor)
 
     def add_scale(self, depth_new_scale):
         self.generator.add_scale(depth_new_scale)
