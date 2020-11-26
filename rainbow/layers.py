@@ -171,3 +171,14 @@ class BasicBlock(nn.Module):
         out += identity
         out = self.relu(out)
         return out
+
+
+class PerturbFeatures(nn.Module):
+    def __init__(self, mean, std, device="cuda:0"):
+        super(PerturbFeatures, self).__init__()
+        self.std = std
+        self.mean = mean
+        self.device = device
+
+    def forward(self, x):
+        return x + (torch.randn(x.size()) * self.std + self.mean).to(self.device)

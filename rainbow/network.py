@@ -4,8 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from rainbow.layers import flatten, upscale2d, EqualizedLinear, EqualizedConv2d, EqualizedConv3d, NormalizationLayer, \
-    SqueezeLayer, NoisyLinear, BasicBlock
-from rainbow.network_utils import mini_batch_std_dev, PerturbFeatures
+    SqueezeLayer, NoisyLinear, BasicBlock, PerturbFeatures
+from rainbow.network_utils import mini_batch_std_dev
 
 
 class Encoder(nn.Module):
@@ -113,7 +113,7 @@ class BranchedDQN(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, feat_size, action_size, dim_output=1, perturb_factor=0.0):
+    def __init__(self, feat_size, action_size, dim_output=1, perturb_factor=0.0, noise_method="none"):
         super(Generator, self).__init__()
         self.feat_size = feat_size
         self.action_size = action_size
@@ -123,6 +123,7 @@ class Generator(nn.Module):
         self.init_bias_to_zero = True
         self.dim_latent = 4096
         self.scales_depth = [self.depth_scale0]
+        assert noise_method in ["none", "feature_perturb", "noisy_linear"]
 
         self.scale_layers = nn.ModuleList()
 
@@ -130,9 +131,15 @@ class Generator(nn.Module):
         self.to_rgb_layers.append(EqualizedConv2d(self.depth_scale0, self.dim_output, 1, equalized=self.equalized_lr,
                                                   init_bias_to_zero=self.init_bias_to_zero))
 
-        self.to_latent = nn.Sequential(nn.Linear(self.feat_size + self.action_size, self.dim_latent),
-                                       nn.Tanh(),
-                                       )
+        if noise_method == "noisy_linear":
+            self.to_latent = nn.Sequential(
+                NoisyLinear(self.feat_size + self.action_size, self.dim_latent, std_init=perturb_factor),
+                nn.Tanh(),
+            )
+        else:
+            self.to_latent = nn.Sequential(nn.Linear(self.feat_size + self.action_size, self.dim_latent),
+                                           nn.Tanh(),
+                                           )
 
         self.format_layer = EqualizedLinear(self.dim_latent, 16 * self.scales_depth[0], equalized=self.equalized_lr,
                                             init_bias_to_zero=self.init_bias_to_zero)
@@ -150,7 +157,10 @@ class Generator(nn.Module):
 
         self.generation_activation = None
 
-        self.perturb_features = PerturbFeatures(mean=0.0, std=perturb_factor)
+        if noise_method == "feature_perturb":
+            self.perturb_features = PerturbFeatures(mean=0.0, std=perturb_factor)
+        else:
+            self.perturb_features = None
 
     def add_scale(self, depth_new_scale):
         depth_last_scale = self.scales_depth[-1]
@@ -259,12 +269,12 @@ class GeneratorDQN(nn.Module):
 
 
 class BranchedGeneratorDQN(nn.Module):
-    def __init__(self, history_length, hidden_size, atoms, action_size, noisy_std, dim_output=1, perturb_factor=0.0,
-                 residual_network=False):
+    def __init__(self, history_length, hidden_size, atoms, action_size, noisy_std, dim_output=1,
+                 perturb_factor=0.0, noise_method="none", residual_network=False):
         super(BranchedGeneratorDQN, self).__init__()
         self.encoder = BranchedEncoder(history_length, residual_network)
         self.dqn = DQN(self.encoder.feat_size, hidden_size, atoms, action_size, noisy_std)
-        self.generator = Generator(self.encoder.feat_size, action_size, dim_output, perturb_factor)
+        self.generator = Generator(self.encoder.feat_size, action_size, dim_output, perturb_factor, noise_method)
 
     def add_scale(self, depth_new_scale):
         self.generator.add_scale(depth_new_scale)

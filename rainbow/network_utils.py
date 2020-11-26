@@ -88,13 +88,3 @@ class WGANGP:
         if status:
             return -x[:, 0].sum()
         return x[:, 0].sum()
-
-
-class PerturbFeatures:
-    def __init__(self, mean, std, device="cuda:0"):
-        self.std = std
-        self.mean = mean
-        self.device = device
-
-    def __call__(self, tensor):
-        return tensor + (torch.randn(tensor.size()) * self.std + self.mean).to(self.device)
