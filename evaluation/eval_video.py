@@ -25,7 +25,7 @@ def create_video(env, agent, pad, filename, fps, seconds):
 
 def main():
     pad = [(5, 5), (5, 5), (0, 0)]
-    train_env, test_env, agent, agent_folder = init_evaluation(use_backgrounds=False)
+    train_env, test_env, agent, agent_folder = init_evaluation(model="noisy_linear", use_backgrounds=False)
     create_video(train_env, agent, pad, f"{agent_folder}/train_envs", fps=60, seconds=30)
     create_video(test_env, agent, pad, f"{agent_folder}/test_envs", fps=60, seconds=30)
 
