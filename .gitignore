@@ -131,3 +131,4 @@ pytorch_GAN_zoo/
 trained_models/
 trained_agent/
 results/
+.tmp.drivedownload/
